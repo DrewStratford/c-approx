@@ -1,0 +1,126 @@
+section .text
+ global main
+ extern printf
+extern malloc
+extern free
+message db "answer = %d", 10,0
+putChr:
+push ebp 
+mov ebp, esp
+mov eax, [ebp+8] 
+push eax 
+push message 
+call printf 
+add esp, 8 
+mov eax, [ebp+8] 
+leave
+ret
+get:
+push ebp 
+mov ebp, esp
+mov eax, [ebp+8] 
+mov eax, [eax] 
+leave
+ret
+set:
+push ebp 
+mov ebp, esp
+mov eax, [ebp+8] 
+mov ebx, [ebp+12] 
+mov [eax], ebx 
+mov eax, 1 
+leave
+ret
+
+
+;; program begin
+
+
+fac:
+push ebp
+mov ebp, esp
+sub esp, 12
+mov ecx, [ebp+8]
+push ecx
+mov ecx, 1
+push ecx
+pop ebx
+pop eax
+add eax,ebx
+push eax
+mov ecx, 1
+push ecx
+pop ebx
+pop eax
+sub eax,ebx
+push eax
+pop ecx
+mov [ebp+8], ecx
+mov ecx, [ebp+8]
+push ecx
+pop ecx
+mov [ebp-4], ecx
+mov ecx, 1
+push ecx
+pop ecx
+mov [ebp-8], ecx
+.WH_1:
+mov ecx, [ebp-4]
+push ecx
+mov ecx, 0
+push ecx
+pop ebx
+pop eax
+cmp eax,ebx
+setg al
+movzx eax, al
+push eax
+pop eax
+cmp eax,0
+je .WH_END_1
+mov ecx, [ebp-8]
+push ecx
+mov ecx, [ebp-4]
+push ecx
+pop ebx
+pop eax
+imul eax,ebx
+push eax
+pop ecx
+mov [ebp-8], ecx
+mov ecx, [ebp-4]
+push ecx
+mov ecx, 1
+push ecx
+pop ebx
+pop eax
+sub eax,ebx
+push eax
+pop ecx
+mov [ebp-4], ecx
+jmp .WH_1
+.WH_END_1:
+mov ecx, [ebp-8]
+push ecx
+pop eax
+leave
+ret
+main:
+push ebp
+mov ebp, esp
+sub esp, 4
+mov ecx, 5
+push ecx
+call fac
+add esp,4
+push eax
+call putChr
+add esp,4
+push eax
+pop ecx
+mov [ebp-4], ecx
+mov ecx, 0
+push ecx
+pop eax
+leave
+ret

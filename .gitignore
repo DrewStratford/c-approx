@@ -1,0 +1,6 @@
+*.out
+*.o
+*.hs~
+*.asm
+dist/*
+*.hi

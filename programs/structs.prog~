@@ -1,0 +1,40 @@
+struct test {
+	int a,
+	int b
+	}
+
+struct testtwo{
+	struct test aa,
+	int bb
+}
+
+struct test foo(int x, int y){
+	return {a : x, b : y};
+	}
+
+
+struct test testSum(struct test x, struct test y){
+       return { a : x[a] + y[a], b: x[b] + y[b] };
+
+}
+
+struct test fun(struct testtwo i){
+	int sink = putChr(i[bb]);
+	return i[aa];
+}
+
+int main(){
+	struct test beta = { a :20 , b : 33 };
+	struct test theta = testSum( { b : 1000, a:2000}
+	       	    	    	    ,testSum(beta,foo(666,777)
+				    ));
+
+	int sink = putChr(theta[a]);
+	sink = putChr(theta[b]);
+	sink = putChr(333);
+	sink = putChr(333);
+
+	struct test baka = fun({ aa : beta, bb : 101010 });
+	sink = putChr(baka[b]);
+	return 10;
+	}

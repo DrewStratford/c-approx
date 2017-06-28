@@ -1,0 +1,11 @@
+int id(int i){
+	return i;
+}
+
+int main(){
+	int i = id(-1);
+	int sink = putChr(i);
+	i = i + 20;
+	sink = putChr(i);
+	return 0;
+}

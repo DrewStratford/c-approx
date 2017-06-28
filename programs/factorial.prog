@@ -1,0 +1,14 @@
+int fac(int a){ 
+   a = a +1 - 1;
+   int count = a; 
+   int result = 1; 
+   while(  count > 0){ 
+     int result = result * count; 
+     int count = count - 1; 
+   } 
+   return result; 
+ } 
+ int main(){
+		 int o = putChr(fac(5));
+		 return 0;
+ }

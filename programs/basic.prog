@@ -1,0 +1,8 @@
+struct test{
+	int a,
+	int b
+}
+
+struct test main(){
+	return { b 10, a 20 };
+}

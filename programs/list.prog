@@ -1,0 +1,18 @@
+list<int> test = { 1 , 2 , 3 };
+list<int> other = {4,5,6};
+
+list<int> appendAllInt(list<int> a, list<int> b){
+	  int i = 0;
+	  int l = 3;
+	  list<int> out = a;
+	  while(i < l){
+	  	  list<int> out = out ++ (b !! i);
+		  int i = i + 1;	  	  
+	  }
+	  return out;
+}
+
+list<int> result = appendAllInt(test, other);
+
+
+int l = length(test)+length(other);

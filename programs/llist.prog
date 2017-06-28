@@ -1,0 +1,22 @@
+struct node{
+	int a,
+	int next
+}
+
+
+struct llist{
+	struct node head,
+	struct node end
+}
+
+struct test{
+	struct llist ls
+}
+
+struct test a(struct llist ll){
+	return { ls : ll };
+}
+struct llist new(){
+	return { head : { a : 10, next : 0} , end : { a:11, next :0 } };
+}
+

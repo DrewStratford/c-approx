@@ -1,0 +1,90 @@
+int offset = 65;
+
+list<int> test = "hello world\n";
+list<int> fail = "bad news\n";
+
+int putStr(list<int> str){
+    int l = length(str);
+    int i = 0;
+    while(i < l){ int c = putChr(str !! i); int i = i + 1;}
+    return 1;
+}
+
+bool not(bool b){
+     if(b){
+	return False;
+     } else{
+       return True;
+     }
+}
+
+list<int> ask(list<int> query){
+	  int sink = putStr(query);
+	  list<int> out = {};
+	  while(True){
+	  	      int input = getChr();
+		      int sink = putChr(input);
+		      if(input == 10){
+		      	       return out;
+		      } else {
+		        list<int> out = out ++ input;
+		      }
+	  }
+	  return out;
+}
+
+list<int> toMessage(list<int> msg){
+	int l = length(msg);
+	list<int> out = {};
+	int i = 0;
+	while(i < l){
+		list<int> out = out ++ ((msg !! i));
+		int i = i + 1;
+	}
+	return out;
+}
+
+list<int> appendAllInt(list<int> a, list<int> b){
+	  int i = 0;
+	  int l = length(b);
+	  list<int> out = a;
+	  while(i < l){
+	  	  list<int> out = out ++ (b !! i);
+		  int i = i + 1;	  	  
+	  }
+	  return out;
+}
+
+list<int> concat(list<list<int>> strings){
+	  int len = length(strings);
+	  //this is an intentional bug
+	  list<int> out = strings !! 0;
+	  int i = 1;
+
+	  while(i < len){
+	  	  list<int> b = strings !! i;
+		  int l = length(b);
+		  int j = 0;
+	  	  while(j < l){
+		  	  list<int> out = out ++ (b !! j);
+			  int j = j + 1;	  	  
+		  }
+		  int i = i + 1;	  	  
+	  }
+	  return out;
+
+}
+int m = 0;
+if( 1 < 0){
+    int m = putStr(toMessage(test));
+} else {
+    int m = putStr(fail);
+    }
+
+list<list<int>> otherMsgs = { "hello", "buddy\n","yowzaa"};
+
+int m = putStr(concat(otherMsgs));
+
+int m = putStr(appendAllInt(otherMsgs !! 0, otherMsgs !! 1));
+
+int sink = putStr(ask("enter yo: "));

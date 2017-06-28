@@ -1,0 +1,35 @@
+int exp(int a){
+  return a * a;
+}
+
+
+int sqrt(int n){
+  int k = n;
+  int step = n / 2;
+  int last = n;
+    
+  while(True){
+    if(k == last + 1  || k == last - 1){
+      return k;
+    } else {
+    }
+    
+    int last = k;
+
+    if (exp(k) == n){
+      return k;
+    } else {
+    }
+
+    if(exp(k) < n){
+      int k = k + step;
+    } else {
+      int k = k - step;
+    }
+    int step = step / 2;
+  }
+  return k;
+}
+int result = sqrt(4);
+int sqr72 = sqrt(72);
+
