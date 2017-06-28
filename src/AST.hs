@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances, PatternSynonyms, ViewPatterns, DeriveFunctor#-}
 module AST where
 
 import Control.Monad
@@ -7,31 +8,54 @@ import Control.Monad.State as S
 import qualified Data.List as L
 import System.IO
 
+import Text.Parsec.Pos
 import Debug.Trace
 
 
+data Annotation = Annotation
+  { line :: Int
+  , col  :: Int
+  , src  :: String
+  } deriving Show
+
+data Annotated f = SourcePos :*  f (Annotated f) 
+
+instance Show (f (Annotated f)) => Show (Annotated f) where
+  show (_ :* f) = show f
+instance Eq (f (Annotated f)) => Eq (Annotated f) where
+  (_ :* a) == (_ :* b) = a == b
 
 type Prog var = [Definition var]
 
 
-data Definition var = ProcDef String [(var,Type)] Type [Stmt var]
+type Definition a = Annotated (Definition' a)
+data Definition' var stmt = ProcDef String [(var,Type)] Type [Stmt var]
                 | StructDef String [(Var,Type)] 
-                deriving(Show, Eq)
+                deriving (Show, Eq, Functor)
 
-data Stmt var = VarDef Type var (Exp var)
-          | If Int (Exp var) [Stmt var] [Stmt var]
-          | While Int (Exp var) [Stmt var]
+type Stmt a = Annotated (Stmt' a)
+data Stmt' var stmt = VarDef Type var (Exp var)
+          | If Int (Exp var) [stmt] [stmt]
+          | While Int (Exp var) [stmt]
           | Return (Exp var)
           | VoidReturn 
-            deriving (Show, Eq)
+            deriving (Show, Eq, Functor)
 
-data Exp var = Const (Val var)
+type Exp a = Annotated (Exp' a)
+data Exp' var exp = Const (Val var)
          | Var Type  var 
          | Access Type  var var -- Type var, offset(s) 
-         | Bin Op (Exp var) (Exp var)
-         | IfE Int (Exp var) (Exp var) (Exp var)  -- used to expand "Or" statements etc
-         | ProcCall Type [Exp var] String
-           deriving (Show, Eq)
+         | Bin Op exp exp 
+         | IfE Int exp exp exp  -- used to expand "Or" statements etc
+         | ProcCall Type [exp] String
+           deriving (Show, Eq, Functor)
+
+type Val a = Annotated (Val' a)
+data Val' var fix = I Int 
+      | B Bool 
+      | A [fix] 
+      | S [(Var, Exp var)]
+      deriving (Show, Eq, Functor)
 
 data Op = Plus | Minus | Times | Div | Mod | And | Or | Lt | Gt | Eq | Index | Append
           deriving (Show, Eq, Read)
@@ -82,14 +106,6 @@ makeNewStack args = do
       go o x = (o + sizeOf x)
   put (SI ns sp)
 
-  {-
-makeNewStack :: [Var] -> RenameM ()
-makeNewStack args = do
-  let ns = zip args $ map go [8, 12 ..]
-      sp = 4
-      go x = "[ebp+" ++ show x ++ "]"
-  put (SI ns sp)
--}
 
 toLocal x = "[ebp-" ++ show x ++ "]"
 
@@ -102,64 +118,72 @@ renameProg p = fst $ runState go st
         go = mapM renameDef p
 
 renameExp :: Exp Var -> RenameM (Exp Int) 
-renameExp exp = case exp of
-  Access t@(Struct ss) v off -> do
-    v' <- changeVar t v
-    let off' = lookupStructField ss off
-    -- here we also retype the struct to reflect
-    -- the return type of the access
-    case lookup off ss of
-      Just t' -> return (Access t' v' off')
-      Nothing -> error "struct access with improper fields"
-  Access t v off -> error "struct access with bad type"
-  Var t v -> do
-    v' <- changeVar t v
-    return (Var t v')
-  ProcCall t exps n -> do
-    exps' <- mapM renameExp exps
-    return (ProcCall t exps' n)
-  Bin o a b -> do
-    a' <- renameExp a
-    b' <- renameExp b
-    return (Bin o a' b')
-  IfE l cond th el -> do
-    cond' <- renameExp cond
-    th' <- renameExp th
-    el' <- renameExp el
-    return (IfE l cond' th' el')
-  Const val -> renameVal val >>= return . Const
+renameExp (co -> (exp, ann)) = ann <$> case exp of
+       Access t@(Struct ss) v off  ->  do
+         v' <- changeVar t v
+         let off' = lookupStructField ss off
+         -- here we also retype the struct to reflect
+         -- the return type of the access
+         case lookup off ss of
+           Just t' -> return (Access t' v' off')
+           Nothing -> error "struct access with improper fields"
+
+       Access t v off -> error "struct access with bad type"
+
+       Var t v -> do
+         v' <- changeVar t v
+         return (Var t v')
+
+       ProcCall t exps n  ->  do
+         exps' <- mapM renameExp exps
+         return (ProcCall t exps' n)
+
+       Bin o a b  ->  do
+         a' <- renameExp a
+         b' <- renameExp b
+         return (Bin o a' b')
+
+       IfE l cond th el  ->  do
+         cond' <- renameExp cond
+         th' <- renameExp th
+         el' <- renameExp el
+         return (IfE l cond' th' el')
+
+       Const val  ->
+         renameVal val >>= return . Const
+
 
 renameVal :: Val Var -> RenameM (Val Int)
-renameVal val = case val of
-  B b -> return (B b)
-  I b -> return (I b)
-  A vs -> do
-    vs' <- mapM renameVal vs
-    return (A vs')
-  S vs -> do
-    let (ns, es) = unzip vs
-    es' <- mapM renameExp es
-    return (S $ zip ns es')
+renameVal (co -> (val, ann)) = ann <$> case val of
+    B b -> return (B b)
+    I b -> return (I b)
+    A vs -> do
+      vs' <- mapM renameVal vs
+      return (A vs')
+    S vs -> do
+      let (ns, es) = unzip vs
+      es' <- mapM renameExp es
+      return (S $ zip ns es')
 
 
 renameDef :: Definition String -> RenameM (Definition Int)
-renameDef def = case def of
-  ProcDef n args typ stmts -> do
-    let (argNames, argTypes) = unzip args
-    old <- get
-    --makeNewStack argNames
-    makeNewStack args
-    argNames' <- map snd <$> names <$> get
-    let args' = zip argNames' argTypes
+renameDef (co -> (def, ann)) = ann <$> case def of
+       ProcDef n args typ stmts -> do
+         let (argNames, argTypes) = unzip args
+         old <- get
+         --makeNewStack argNames
+         makeNewStack args
+         argNames' <- map snd <$> names <$> get
+         let args' = zip argNames' argTypes
 
-    stmts' <- mapM rename stmts
-    put old
-    return (ProcDef n args' typ stmts')
-  StructDef n as -> return (StructDef n as)
+         stmts' <- mapM rename stmts
+         put old
+         return (ProcDef n args' typ stmts')
+       StructDef n as -> return (StructDef n as)
   
 
 rename :: Stmt String -> RenameM (Stmt Int)
-rename stmt = case stmt of
+rename (co -> (stmt,ann)) = ann <$> case stmt of
   Return exp -> renameExp exp >>= (return . Return)
   If l exp stmts stmts2 -> do
     exp' <- renameExp exp
@@ -218,52 +242,52 @@ lookupStructField typs var = sum $ map (sizeOf . snd) a
 type LabelM a = S.State Int a
 
 setLabelExp :: Exp a -> LabelM (Exp a)
-setLabelExp exp = case exp of
-  Bin op l r -> do
-    l' <- setLabelExp l
-    r' <- setLabelExp r
-    return (Bin op l' r')
-  IfE _ c th el -> do
-    l <- getNextLabel
-    c' <- setLabelExp c
-    th' <- setLabelExp th
-    el' <- setLabelExp el
-    return (IfE l c' th' el')
-  ProcCall t args x -> do
-    args' <- mapM setLabelExp args
-    return (ProcCall t args' x)
+setLabelExp (co -> (exp,ann)) = ann <$> case exp of
+    Bin op l r -> do
+      l'  <-  setLabelExp l
+      r'  <-  setLabelExp r
+      return (Bin op l' r')
+    IfE _ c th el -> do
+      l    <-  getNextLabel
+      c'   <-  setLabelExp c
+      th'  <-  setLabelExp th
+      el'  <-  setLabelExp el
+      return (IfE l c' th' el')
+    ProcCall t args x -> do
+      args'  <-  mapM setLabelExp args
+      return (ProcCall t args' x)
 
-  nonRecursive -> return nonRecursive
+    nonRecursive -> return nonRecursive
 
   
 setLabel :: Stmt v -> LabelM (Stmt v)
-setLabel stmt = case stmt of
-  If _ exp stmts stmts2 -> do
-    l <- getNextLabel
-    exp' <- setLabelExp exp
-    stmts' <- mapM setLabel stmts
-    stmts2' <- mapM setLabel stmts2
-    return (If l exp' stmts' stmts2')
-  While _ exp stmts -> do
-    l <- getNextLabel
-    exp' <- setLabelExp exp
-    stmts' <- mapM setLabel stmts
-    return (While l exp' stmts')
-  VarDef t v exp -> do
-    exp' <- setLabelExp exp
-    return (VarDef t v exp')
-  Return exp -> do
-    exp' <- setLabelExp exp
-    return (Return exp')
-  VoidReturn -> return VoidReturn
+setLabel (co -> (stmt,ann)) = ann <$> case stmt of
+       If _ exp stmts stmts2  -> do
+         l <- getNextLabel
+         exp' <- setLabelExp exp
+         stmts' <- mapM setLabel stmts
+         stmts2' <- mapM setLabel stmts2
+         return (If l exp' stmts' stmts2')
+       While _ exp stmts  -> do
+         l <- getNextLabel
+         exp' <- setLabelExp exp
+         stmts' <- mapM setLabel stmts
+         return (While l exp' stmts')
+       VarDef t v exp -> do
+         exp' <- setLabelExp exp
+         return (VarDef t v exp')
+       Return exp -> do
+         exp' <- setLabelExp exp
+         return (Return exp')
+       VoidReturn  -> return VoidReturn
 
 setLabelDef :: Definition v -> LabelM (Definition v)
-setLabelDef stmt = case stmt of
-  ProcDef n args typ stmts -> do
-    let (argNames, argTypes) = unzip args
-    stmts' <- mapM setLabel stmts
-    return (ProcDef n args typ stmts')
-  _ -> return stmt
+setLabelDef (co -> (stmt, ann)) = ann <$> case stmt of
+       ProcDef n args typ stmts -> do
+         let (argNames, argTypes) = unzip args
+         stmts' <- mapM setLabel stmts
+         return (ProcDef n args typ stmts')
+       _ -> return stmt
 
  
 getNextLabel :: LabelM Int
@@ -283,26 +307,21 @@ labelProg p = fst $ runState go st
 
 
 getAllVarDefs :: Stmt v -> [(Type, v)]
-getAllVarDefs stmt = case stmt of
+getAllVarDefs (_ :* stmt) = case stmt of
   VarDef t v _ -> [(t,v)]
   If _ _ th el -> concatMap getAllVarDefs th ++ concatMap getAllVarDefs el
   While _ _ th -> concatMap getAllVarDefs th
   _                   -> []
           
+--TODO check against bad type matches
 sizeLocalVars :: Ord v => Definition v -> Int
-sizeLocalVars (ProcDef _ _ _ stmts) = sum (map sizeOf vars)
+sizeLocalVars (_ :* ProcDef _ _ _ stmts) = sum (map sizeOf vars)
   where asgns = concatMap getAllVarDefs stmts
         vars  = map (fst . head) $ L.group (L.sortBy (comparing snd) asgns)
 
 sizeArgList :: [(Var,Type)] -> Int
 sizeArgList args = sum (map (sizeOf . snd) args)
 
-
-data Val var = I Int 
-      | B Bool 
-      | A [Val var] 
-      | S [(Var, Exp var)]
-      deriving (Show, Eq)
 
 sizeOf :: Type -> Int
 sizeOf typ = case typ of
@@ -315,12 +334,12 @@ sizeOf typ = case typ of
 
 makeGlobalContext :: [Definition Var] -> [(Var,Type)]
 makeGlobalContext = map go
-  where go (ProcDef i a t _) = (i, Proc a t )
-        go s@(StructDef i a) = (i, Struct a)
+  where go (_ :* ProcDef i a t _) = (i, Proc a t )
+        go (_ :* StructDef i a) = (i, Struct a)
 
 
 getAllFuncDefs = filter isFunc
-  where isFunc p@ProcDef{} = True
+  where isFunc ProcDef{} = True
         isFunc _ = False
 
 {-
@@ -329,23 +348,35 @@ getAllFuncDefs = filter isFunc
 -}
 
 convertStructReturning :: Definition Var -> Definition Var
-convertStructReturning def = case def of
+convertStructReturning (co -> (def, ann))= ann $ case def of
 
-  ProcDef n args ty@Struct{} stmts -> ProcDef n args' (SpecReturn size) stmts'
+  ProcDef n args ty@Struct{} stmts -> (ProcDef n args' (SpecReturn size) stmts')
     where args' = args ++ [("#ret", ty)]
           size = sizeOf ty
           stmts' = concatMap (changeReturns ty) stmts
 
   _ -> def
 
+
 handleStructs :: [Definition Var] -> [Definition Var]
 handleStructs = map convertStructReturning
 
 changeReturns :: Type -> Stmt Var -> [Stmt Var]
-changeReturns t stmt =
+changeReturns t (co -> (stmt, ann)) =
   let recur = concatMap (changeReturns t)
-  in case stmt of
+  in ann <$> case stmt of
     Return exp      ->  [VarDef t "#ret" exp, VoidReturn]
     If i exp th el  ->  [If i exp (recur th) (recur el)]
     While i exp th  ->  [While i exp (recur th)]
-    _               ->  [stmt]
+    s               ->  [s]
+
+
+--util for returning cofree
+returnC a b = return (a :* b)
+
+annotate_ a p = (a :*) p
+
+co  (a :* b) = (b, annotate_ a)
+  
+flatten (a :* b) = b
+flatten2 (a :* b) = flatten <$> b

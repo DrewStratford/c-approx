@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Parser where
 
+import Control.Monad
 import Data.Functor.Identity
 import Data.Ord
 import qualified Data.List as L
@@ -44,7 +45,7 @@ parseFuncDef = do
   ident <- identifier parser
   argTypes <- parens parser $ commaSep parser argType
   stmts <- braces parser $ many parseStmt
-  return $ ProcDef ident argTypes typ stmts
+  annotate $ ProcDef ident argTypes typ stmts
 
 
 argType :: Parser String (Var, Type)
@@ -59,7 +60,7 @@ parseStructDef = do
   reserved parser "struct"
   ident <- identifier parser
   argTypes <- braces parser $ commaSep parser argType
-  return $ StructDef ident (sortStruct argTypes)
+  annotate $ StructDef ident (sortStruct argTypes)
 
 
 parseDefinition :: Parser String (Definition Var)
@@ -78,7 +79,7 @@ parseAssignment = do
   "="   <- operator parser <?> "expected ="
   exp   <- exprParser
   ";"   <- operator parser <?> "expected ;"
-  return $ VarDef (VarPlaceHolder ident) ident exp
+  annotate $ VarDef (VarPlaceHolder ident) ident exp
 
   
 parseVarDef :: Parser String (Stmt Var)
@@ -88,7 +89,7 @@ parseVarDef = do
   "="   <- operator parser
   exp   <- exprParser
   ";"   <- operator parser <?> "expected ;"
-  return $ VarDef typ ident exp
+  annotate $ VarDef typ ident exp
 
   
 parseReturn :: Parser String (Stmt Var)
@@ -96,14 +97,14 @@ parseReturn = do
   reserved parser "return"
   e <- exprParser
   ";"   <- operator parser <?> "expected ;"
-  return $ Return e
+  annotate $ Return e
 
 parseWhile :: Parser String (Stmt Var)
 parseWhile = do
   reserved parser "while"
   e <- parens parser $ exprParser
   stmts <- braces parser $ many parseStmt
-  return $ While 0 e stmts
+  annotate $ While 0 e stmts
 
 parseIf :: Parser String (Stmt Var)
 parseIf = do
@@ -112,7 +113,7 @@ parseIf = do
   th <- braces parser $ many parseStmt
   reserved parser "else"
   el <- braces parser $ many parseStmt
-  return $ If 0 e th el
+  annotate $ If 0 e th el
 
 
 parseStmt :: Parser String (Stmt Var)
@@ -135,27 +136,30 @@ program = do
 binExp :: String -> Op -> Operator String u Identity (Exp Var)
 binExp p op = 
   let t = do
+        s <- sourcePos 
         reservedOp parser p
-        return $ Bin op
-  in Infix t AssocLeft
+        return $ \a b -> (s :* Bin op a b)
+  in (Infix t AssocLeft)
 
     
 parseFuncCall :: Parser String (Exp Var)
 parseFuncCall = do
   ident <- identifier parser
   as <- parens parser $ commaSep parser exprParser
-  return $ ProcCall (ProcPlaceHolder ident) as ident
+  annotate $ ProcCall (ProcPlaceHolder ident) as ident
 
 parseList :: Parser String (Val Var)
 parseList = do
   vs <- braces parser $ commaSep parser parseVal
-  return $ A vs
+  annotate $ A vs
 
+  {-
 parseString :: Parser String (Val Var)
 parseString = do
   let toI c = I (fromEnum c)
   vs <- map toI <$> (stringLiteral parser)
-  return $ A vs
+  annotate $ A vs
+-}
 
 parseStruct :: Parser String (Val Var)
 parseStruct = do
@@ -165,18 +169,18 @@ parseStruct = do
         v   <- exprParser
         return (typ,v)
   vs <- braces parser $ commaSep parser go
-  return $ S (sortStruct vs)
+  annotate $ S (sortStruct vs)
 
 parseFieldAccess :: Parser String (Exp Var)
 parseFieldAccess = do
   var    <-  identifier parser
   field  <-  brackets parser $ identifier parser
-  return $ Access (StructPlaceHolder var) var field
+  annotate $ Access (StructPlaceHolder var) var field
 
 parseVal :: Parser String (Val Var)
-parseVal = try (reserved parser "True" >> return (B True))
-           <|> try (reserved parser "False" >> return (B False))
-           <|> try (integer parser >>= return . I . fromInteger)
+parseVal = try (reserved parser "True" >> annotate (B True))
+           <|> try (reserved parser "False" >> annotate (B False))
+           <|> try (integer parser >>= annotate . I . fromInteger)
            <|> try parseStruct
            <?> "couldn't parse a value"
   
@@ -196,13 +200,13 @@ parseType =  (reserved parser "bool" >> return Bool)
 
 
 parseTerm :: Parser String (Exp Var)
-parseTerm = try (Const <$> parseVal)
+parseTerm = try (Const <$> parseVal >>= annotate)
          <|> try (parens parser exprParser)
          <|> try (parseFuncCall)
          <|> try parseFieldAccess
          <|> try (do
                     ident <- identifier parser
-                    return $ Var (VarPlaceHolder ident) ident
+                    annotate $ Var (VarPlaceHolder ident) ident
                  )
          <?> "expected expression"
 
@@ -237,3 +241,11 @@ parseProg = undefined
 
 sortStruct :: Ord a => [(a, b)] -> [(a,b)]
 sortStruct = L.sortBy (comparing fst)
+
+sourcePos :: Monad m => ParsecT s u m SourcePos
+sourcePos = statePos `liftM` getParserState
+
+annotate :: f (Annotated f) -> Parser s (Annotated f)
+annotate a = do
+  pos <- sourcePos
+  return (undefined :* a)

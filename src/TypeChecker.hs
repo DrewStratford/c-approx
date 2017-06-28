@@ -91,92 +91,98 @@ expands the types of statements so that there are no place holder types
 type ContextM a = S.StateT Context (Either String) a
 
 expandTypeExp :: (Exp Var) -> ContextM (Exp Var)
-expandTypeExp exp = case exp of
-  Bin op l r -> do
-    l' <- expandTypeExp l
-    r' <- expandTypeExp r
-    return (Bin op l' r')
-  IfE l c th el -> do
-    c' <- expandTypeExp c
-    th' <- expandTypeExp th
-    el' <- expandTypeExp el
-    return (IfE l c' th' el')
-  ProcCall (ProcPlaceHolder p) args x -> do
-    typ   <- lookupType p >>= typeExpand
-    args' <- mapM expandTypeExp args
-    return (ProcCall typ args' x)
-  ProcCall t args x -> do
-    args' <- mapM expandTypeExp args
-    t' <- typeExpand t
-    return (ProcCall t' args' x)
-  Access (StructPlaceHolder t) v off -> do
-    typ' <- lookupType t >>= typeExpand
-    return (Access typ' v off)
-  Access (VarPlaceHolder t) v off -> do
-    typ' <- lookupType t >>= typeExpand
-    return (Access typ' v off)
-  Var (VarPlaceHolder t) v -> do
-    typ' <- lookupType t >>= typeExpand
-    return (Var typ' v)
-  Var (StructPlaceHolder t) v -> do
-    typ' <- lookupType t >>= typeExpand
-    return (Var typ' v)
+expandTypeExp (ann :* exp) =
+  let return' = returnC ann
+  in case exp of
+       Bin op l r -> do
+         l' <- expandTypeExp l
+         r' <- expandTypeExp r
+         return' (Bin op l' r')
+       IfE l c th el -> do
+         c' <- expandTypeExp c
+         th' <- expandTypeExp th
+         el' <- expandTypeExp el
+         return' (IfE l c' th' el')
+       ProcCall (ProcPlaceHolder p) args x -> do
+         typ   <- lookupType p >>= typeExpand
+         args' <- mapM expandTypeExp args
+         return' (ProcCall typ args' x)
+       ProcCall t args x -> do
+         args' <- mapM expandTypeExp args
+         t' <- typeExpand t
+         return' (ProcCall t' args' x)
+       Access (StructPlaceHolder t) v off -> do
+         typ' <- lookupType t >>= typeExpand
+         return' (Access typ' v off)
+       Access (VarPlaceHolder t) v off -> do
+         typ' <- lookupType t >>= typeExpand
+         return' (Access typ' v off)
+       Var (VarPlaceHolder t) v -> do
+         typ' <- lookupType t >>= typeExpand
+         return' (Var typ' v)
+       Var (StructPlaceHolder t) v -> do
+         typ' <- lookupType t >>= typeExpand
+         return' (Var typ' v)
 
-  Const val -> expandTypeVal val >>= return . Const
+       Const val -> expandTypeVal val >>= return' . Const
 
-  nonRecursive -> return nonRecursive
+       nonRecursive -> return' nonRecursive
 
   
 expandType :: (Stmt Var) -> ContextM (Stmt Var)
-expandType stmt = case stmt of
-  If l exp stmts stmts2 -> do
-    exp' <- expandTypeExp exp
-    stmts' <- mapM expandType stmts
-    stmts2' <- mapM expandType stmts2
-    return (If l exp' stmts' stmts2')
-  While l exp stmts -> do
-    exp' <- expandTypeExp exp
-    stmts' <- mapM expandType stmts
-    return (While l exp' stmts')
-  VarDef (VarPlaceHolder t) v exp -> do
-    typ  <- lookupType t >>= typeExpand
-    exp' <- expandTypeExp exp
-    insertType (v, typ)
-    return (VarDef typ v exp')
-  VarDef (StructPlaceHolder t) v exp -> do
-    typ  <- lookupType t >>= typeExpand
-    exp' <- expandTypeExp exp
-    insertType (v, typ)
-    return (VarDef typ v exp')
-  VarDef t v exp -> do
-    exp' <- expandTypeExp exp
-    insertType (v, t)
-    return (VarDef t v exp')
-  Return exp -> do
-    exp' <- expandTypeExp exp
-    return (Return exp')
+expandType (ann :* stmt) =
+  let return' = returnC ann
+  in case stmt of
+       If l exp stmts stmts2 -> do
+         exp' <- expandTypeExp exp
+         stmts' <- mapM expandType stmts
+         stmts2' <- mapM expandType stmts2
+         return' (If l exp' stmts' stmts2')
+       While l exp stmts -> do
+         exp' <- expandTypeExp exp
+         stmts' <- mapM expandType stmts
+         return' (While l exp' stmts')
+       VarDef (VarPlaceHolder t) v exp -> do
+         typ  <- lookupType t >>= typeExpand
+         exp' <- expandTypeExp exp
+         insertType (v, typ)
+         return' (VarDef typ v exp')
+       VarDef (StructPlaceHolder t) v exp -> do
+         typ  <- lookupType t >>= typeExpand
+         exp' <- expandTypeExp exp
+         insertType (v, typ)
+         return' (VarDef typ v exp')
+       VarDef t v exp -> do
+         exp' <- expandTypeExp exp
+         insertType (v, t)
+         return' (VarDef t v exp')
+       Return exp -> do
+         exp' <- expandTypeExp exp
+         return' (Return exp')
 
 
 expandTypeDef :: (Definition Var) -> ContextM (Definition Var)
-expandTypeDef def = case def of
-  ProcDef n args typ stmts -> do
-    let (argNames, argTypes) = unzip args
-    -- we need to get the old context
-    oldContext <- get
-    args' <-  zip argNames <$> mapM typeExpand argTypes
-    insertTypes args'
+expandTypeDef (ann :* def) =
+  let return' = returnC ann
+  in case def of
+       ProcDef n args typ stmts -> do
+         let (argNames, argTypes) = unzip args
+         -- we need to get the old context
+         oldContext <- get
+         args' <-  zip argNames <$> mapM typeExpand argTypes
+         insertTypes args'
 
-    typ' <- typeExpand typ
-    stmts' <- mapM expandType stmts
+         typ' <- typeExpand typ
+         stmts' <- mapM expandType stmts
 
-    put oldContext
-    return (ProcDef n args' typ' stmts')
+         put oldContext
+         return' (ProcDef n args' typ' stmts')
 
-  -- TODO: we need to expand embedded structs
-  StructDef n vs -> do
-    vs' <- mapM typeExpandArg vs
-    insertType (n, Struct vs')
-    return (StructDef n vs')
+       -- TODO: we need to expand embedded structs
+       StructDef n vs -> do
+         vs' <- mapM typeExpandArg vs
+         insertType (n, Struct vs')
+         return' (StructDef n vs')
 
 
 expandTypeProg :: Context -> (Prog Var) -> Either String (Prog Var)
@@ -208,16 +214,18 @@ typeExpand ty = case ty of
   _ -> return ty
 
 expandTypeVal :: Val String -> ContextM (Val Var)
-expandTypeVal val = case val of
-  B b -> return (B b)
-  I b -> return (I b)
-  A vs -> do
-    vs' <- mapM expandTypeVal vs
-    return (A vs')
-  S elems -> do
-    let (ns, vs) = unzip elems
-    vs' <- mapM expandTypeExp vs
-    return (S $ zip ns vs')
+expandTypeVal (ann :* val) =
+  let return' = returnC ann
+  in case val of
+       B b -> return' (B b)
+       I b -> return' (I b)
+       A vs -> do
+         vs' <- mapM expandTypeVal vs
+         return' (A vs')
+       S elems -> do
+         let (ns, vs) = unzip elems
+         vs' <- mapM expandTypeExp vs
+         return' (S $ zip ns vs')
   
 
 lookupType :: Var -> ContextM Type

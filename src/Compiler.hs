@@ -1,4 +1,4 @@
-
+{-# LANGUAGE ViewPatterns #-}
 import Control.Monad.State as S
 import qualified Data.List as L
 import System.Environment
@@ -87,7 +87,7 @@ loadStruct start size = concatMap go (structAddresses start size)
                , "push ecx"
                ]
 
--- FIXME: the offset addresses aren't being calculated properly
+  
 loadStructOff :: Int -> Int -> Int -> [String]
 loadStructOff start size off =
     setUp ++ concatMap go ([0,4 .. size -1])
@@ -103,15 +103,16 @@ storeStruct start size = concatMap go (reverse $ structAddresses start size)
                , "mov " ++ showVariable (x) ++ ", ecx"
                ]
 
-showVal v = case v of
+showVal (_ :* v) = case v of
   I i -> show i
   B True -> "1"
   B False -> "0"
   _ -> error "cant show lists yet"
 
 
-expToAsm exp = case exp of
-  Const (S vs)  -> loadStructImm vs
+--expToAsm (_ :* exp) = case exp of
+expToAsm (_ :* exp) = case exp of
+  Const (_ :* S vs)  -> loadStructImm vs
   Const v       -> loadIToAsm (showVal v)
   --TODO This doesn't properly load an embedded struct
   Access s@Struct{} v off -> loadStructOff v (sizeOf s) off
@@ -148,12 +149,12 @@ showVariable x = if x < 0
 
 
 stmtToAsm :: Stmt Int -> [String]
-stmtToAsm stmt = case stmt of
+stmtToAsm (_ :* stmt) = case stmt of
   VarDef s@(Struct vs) v exp -> expToAsm exp ++ storeStruct v (sizeOf s)
   --VarDef _ v (Const val) -> ["mov ecx, " ++ showVal val, "mov " ++ v ++ ", ecx"]
-  VarDef _ v (Const val) -> ["mov ecx, " ++ showVal val
+  VarDef _ v (_ :* Const val) -> ["mov ecx, " ++ showVal val
                             , "mov " ++ showVariable v ++ ", ecx"]
-  VarDef _ v (Var _ var) -> ["mov ecx, " ++ showVariable var
+  VarDef _ v (_ :* Var _ var) -> ["mov ecx, " ++ showVariable var
                             , "mov " ++ showVariable v ++ ", ecx"]
   VarDef _ v exp -> expToAsm exp ++ storeToAsm v
 
@@ -172,11 +173,11 @@ stmtToAsm stmt = case stmt of
   VoidReturn -> ["leave","ret"]
 
 
-definitionToAsm def = case def of
+definitionToAsm d@(_ :* def) = case def of
   ProcDef label _ _ stmts ->
     [label ++ ":"] ++ makeRoom ++ concatMap stmtToAsm stmts 
     where makeRoom = ["push ebp", "mov ebp, esp", "sub esp, " ++ localVars]
-          localVars = show $ sizeLocalVars def 
+          localVars = show $ sizeLocalVars d
   --StructDef{} -> ["error attempting to compile a struct"]
   StructDef{} -> []
 
@@ -232,3 +233,4 @@ builtinFuncs = [("putChr", Proc [("",Int)] Int)
                ,("set", Proc [("",Int),("",Int)] Int)
                , ("get", Proc [("",Int)] Int)
                ]
+
