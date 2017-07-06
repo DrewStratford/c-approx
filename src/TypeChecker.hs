@@ -5,10 +5,11 @@ import Control.Monad
 import Control.Monad.State as S
 import qualified Data.List as L
 
+import Text.Parsec.Pos
 
 type Context = [(Var, Type)]
 
-
+{-
 subType :: String -> Type -> Type -> Type
 subType i repl typ =
   let recur  = subType i repl
@@ -70,18 +71,12 @@ unifyList (a:as) (b:bs) =
 makeConst :: Type -> Type
 makeConst (TVar t) = TConst t
 makeConst a        = a
-
+-}
 
 safeLast [] = Nothing
 safeLast a  = Just (last a)
 
 
-a = Proc [("a", TVar "a1"), ("a2", TVar "a2")] (TVar "a2")
-
-b = Proc [("a", Bool), ("a2", Bool)] Bool 
-c = Proc [("a", Bool), ("a2", TVar "b1")] Bool 
-
-d = [("a", Bool), ("a2", TVar "b1")]
 
 
 {-
@@ -103,26 +98,38 @@ expandTypeExp (ann :* exp) =
          th' <- expandTypeExp th
          el' <- expandTypeExp el
          return' (IfE l c' th' el')
-       ProcCall (ProcPlaceHolder p) args x -> do
-         typ   <- lookupType p >>= typeExpand
+       ProcCall (_:* ProcPlaceHolder p) args x -> do
+         typ   <- lookupType ann p >>= typeExpand
          args' <- mapM expandTypeExp args
          return' (ProcCall typ args' x)
        ProcCall t args x -> do
          args' <- mapM expandTypeExp args
          t' <- typeExpand t
          return' (ProcCall t' args' x)
-       Access (StructPlaceHolder t) v off -> do
-         typ' <- lookupType t >>= typeExpand
+       Access (_:* StructPlaceHolder t) v off -> do
+         typ' <- lookupType ann t >>= typeExpand
          return' (Access typ' v off)
-       Access (VarPlaceHolder t) v off -> do
-         typ' <- lookupType t >>= typeExpand
+       Access (_:* VarPlaceHolder t) v off -> do
+         typ' <- lookupType ann t >>= typeExpand
          return' (Access typ' v off)
-       Var (VarPlaceHolder t) v -> do
-         typ' <- lookupType t >>= typeExpand
+       Var (_:* VarPlaceHolder t) v -> do
+         typ' <- lookupType ann t >>= typeExpand
          return' (Var typ' v)
-       Var (StructPlaceHolder t) v -> do
-         typ' <- lookupType t >>= typeExpand
+       Var (_:* StructPlaceHolder t) v -> do
+         typ' <- lookupType ann t >>= typeExpand
          return' (Var typ' v)
+       MkRef (_:* VarPlaceHolder t) v -> do
+         typ' <- lookupType ann t >>= typeExpand
+         return' (MkRef typ' v)
+       MkRef (_:* StructPlaceHolder t) v -> do
+         typ' <- lookupType ann t >>= typeExpand
+         return' (MkRef typ' v)
+       GetRef (_:* VarPlaceHolder t) v -> do
+         typ' <- lookupType ann t >>= typeExpand
+         return' (GetRef typ' v)
+       GetRef (_:* StructPlaceHolder t) v -> do
+         typ' <- lookupType ann t >>= typeExpand
+         return' (GetRef typ' v)
 
        Const val -> expandTypeVal val >>= return' . Const
 
@@ -142,13 +149,13 @@ expandType (ann :* stmt) =
          exp' <- expandTypeExp exp
          stmts' <- mapM expandType stmts
          return' (While l exp' stmts')
-       VarDef (VarPlaceHolder t) v exp -> do
-         typ  <- lookupType t >>= typeExpand
+       VarDef (_:* VarPlaceHolder t) v exp -> do
+         typ  <- lookupType ann t >>= typeExpand
          exp' <- expandTypeExp exp
          insertType (v, typ)
          return' (VarDef typ v exp')
-       VarDef (StructPlaceHolder t) v exp -> do
-         typ  <- lookupType t >>= typeExpand
+       VarDef (_:* StructPlaceHolder t) v exp -> do
+         typ  <- lookupType ann t >>= typeExpand
          exp' <- expandTypeExp exp
          insertType (v, typ)
          return' (VarDef typ v exp')
@@ -159,6 +166,14 @@ expandType (ann :* stmt) =
        Return exp -> do
          exp' <- expandTypeExp exp
          return' (Return exp')
+       Set (_:* StructPlaceHolder t) v off exp -> do
+         exp' <- expandTypeExp exp
+         typ' <- lookupType ann t >>= typeExpand
+         return' (Set typ' v off exp')
+       Set (_:* VarPlaceHolder t) v off exp -> do
+         exp' <- expandTypeExp exp
+         typ' <- lookupType ann t >>= typeExpand
+         return' (Set typ' v off exp')
 
 
 expandTypeDef :: (Definition Var) -> ContextM (Definition Var)
@@ -181,7 +196,7 @@ expandTypeDef (ann :* def) =
        -- TODO: we need to expand embedded structs
        StructDef n vs -> do
          vs' <- mapM typeExpandArg vs
-         insertType (n, Struct vs')
+         insertType (n, ann :* Struct vs')
          return' (StructDef n vs')
 
 
@@ -200,18 +215,21 @@ typeExpandArg (a, t) = do
   return (a, t')
   
 typeExpand :: Type -> ContextM Type
-typeExpand ty = case ty of
-  VarPlaceHolder v    -> lookupType v
-  ProcPlaceHolder v   -> lookupType v
-  StructPlaceHolder v -> lookupType v
+typeExpand (pos :* ty) = case ty of
+  VarPlaceHolder v    -> lookupType pos v
+  ProcPlaceHolder v   -> lookupType pos v
+  StructPlaceHolder v -> lookupType pos v
+  Ref typ -> do
+    typ' <- typeExpand typ
+    return (pos :* Ref typ')
   Proc as ret -> do
     as' <- mapM typeExpandArg as
     ret' <- typeExpand ret
-    return (Proc as' ret')
+    return (pos :* Proc as' ret')
   Struct as -> do
     as' <- mapM typeExpandArg as
-    return (Struct as')
-  _ -> return ty
+    return (pos :* Struct as')
+  t -> return (pos :* t)
 
 expandTypeVal :: Val String -> ContextM (Val Var)
 expandTypeVal (ann :* val) =
@@ -227,13 +245,13 @@ expandTypeVal (ann :* val) =
          vs' <- mapM expandTypeExp vs
          return' (S $ zip ns vs')
   
-
-lookupType :: Var -> ContextM Type
-lookupType v = do
+-- TO CONSIDER: should this return annotated types?
+lookupType :: SourcePos -> Var -> ContextM Type
+lookupType pos v = do
   context <- get
   let t = L.lookup v context
   case t of
-    Nothing -> lift $ Left ("couldn't find type: " ++ v)
+    Nothing -> lift $ Left (show pos ++ ": couldn't find type of: " ++ v)
     Just t' -> return t'
   
 insertType :: (Var, Type) -> ContextM ()

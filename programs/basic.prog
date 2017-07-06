@@ -4,5 +4,5 @@ struct test{
 }
 
 struct test main(){
-	return { b 10, a 20 };
+	return { b: 10, a: 20 };
 }

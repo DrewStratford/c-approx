@@ -40,12 +40,12 @@ parser = makeTokenParser definition
 -- parse defintions
 
 parseFuncDef :: Parser String (Definition Var)
-parseFuncDef = do
+parseFuncDef = annotate $ do
   typ   <- parseType
   ident <- identifier parser
   argTypes <- parens parser $ commaSep parser argType
   stmts <- braces parser $ many parseStmt
-  annotate $ ProcDef ident argTypes typ stmts
+  return $ ProcDef ident argTypes typ stmts
 
 
 argType :: Parser String (Var, Type)
@@ -56,17 +56,17 @@ argType = do
 
 
 parseStructDef :: Parser String (Definition Var)
-parseStructDef = do
+parseStructDef = annotate $ do
   reserved parser "struct"
   ident <- identifier parser
   argTypes <- braces parser $ commaSep parser argType
-  annotate $ StructDef ident (sortStruct argTypes)
+  return $ StructDef ident (sortStruct argTypes)
 
 
 parseDefinition :: Parser String (Definition Var)
-parseDefinition = try parseFuncDef
-                  <|> try parseStructDef
-                  <?> "expected definition"
+parseDefinition =  try parseStructDef
+               <|> parseFuncDef
+               <?> "definition"
 
 --------------------------------------------------------------------------------
 -- parse stmts
@@ -74,54 +74,75 @@ parseDefinition = try parseFuncDef
   
 
 parseAssignment :: Parser String (Stmt Var)
-parseAssignment = do
-  ident <- identifier parser
-  "="   <- operator parser <?> "expected ="
+parseAssignment = annotate' $ \pos -> do
+  ident <- try $ do i <- identifier parser
+                    reservedOp parser "="
+                    return i
   exp   <- exprParser
-  ";"   <- operator parser <?> "expected ;"
-  annotate $ VarDef (VarPlaceHolder ident) ident exp
+  reservedOp parser ";"
+  return $ VarDef (pos :* VarPlaceHolder ident) ident exp
 
   
 parseVarDef :: Parser String (Stmt Var)
-parseVarDef = do
+parseVarDef = annotate $ do
   typ   <- parseType
   ident <- identifier parser
-  "="   <- operator parser
+  reservedOp parser "="
   exp   <- exprParser
-  ";"   <- operator parser <?> "expected ;"
-  annotate $ VarDef typ ident exp
+  reservedOp parser ";"
+  return $ VarDef typ ident exp
 
   
 parseReturn :: Parser String (Stmt Var)
-parseReturn = do
-  reserved parser "return"
+parseReturn = annotate $ do
+  try $ reserved parser "return"
   e <- exprParser
-  ";"   <- operator parser <?> "expected ;"
-  annotate $ Return e
+  reservedOp parser ";"
+  return $ Return e
 
 parseWhile :: Parser String (Stmt Var)
-parseWhile = do
-  reserved parser "while"
+parseWhile = annotate $ do
+  try $ reserved parser "while"
   e <- parens parser $ exprParser
   stmts <- braces parser $ many parseStmt
-  annotate $ While 0 e stmts
+  return $ While 0 e stmts
 
 parseIf :: Parser String (Stmt Var)
-parseIf = do
-  reserved parser "if"
+parseIf = annotate $ do
+  try $ reserved parser "if"
   e <- parens parser $ exprParser
   th <- braces parser $ many parseStmt
-  reserved parser "else"
-  el <- braces parser $ many parseStmt
-  annotate $ If 0 e th el
+  (
+    (do try $ do reserved parser "else"
+                 lookAhead (reserved parser "if")
+        elif <- parseIf
+        return $ If 0 e th [elif]
+    ) <|>
+    (do try $ reserved parser "else"
+        el <- braces parser $ many parseStmt
+        return $ If 0 e th el) <|>
+    (return $ If 0 e th [])
+    )
+
+parseFieldAssign :: Parser String (Stmt Var)
+parseFieldAssign = annotate' $ \pos -> do
+  var    <-  identifier parser
+  field  <-  brackets parser $ identifier parser
+  reservedOp parser "=" 
+  e <- exprParser
+  reservedOp parser ";"
+  return $ Set (pos :* StructPlaceHolder var) var field e
 
 
 parseStmt :: Parser String (Stmt Var)
-parseStmt = try parseAssignment
-         <|> try parseVarDef
-         <|> try parseIf
-         <|> try parseReturn
-         <|> try parseWhile
+parseStmt =  try parseVarDef
+         <|> try parseAssignment
+         <|> parseIf
+         <|> parseSetRef
+         <|> parseReturn
+         <|> parseWhile
+         <|> parseFieldAssign
+         -- <|> parseVarDef
          <?> "failed to parse Stmt"
          
 
@@ -143,78 +164,108 @@ binExp p op =
 
     
 parseFuncCall :: Parser String (Exp Var)
-parseFuncCall = do
+parseFuncCall = annotate' $ \pos -> do
   ident <- identifier parser
   as <- parens parser $ commaSep parser exprParser
-  annotate $ ProcCall (ProcPlaceHolder ident) as ident
+  return $ ProcCall (pos :* ProcPlaceHolder ident) as ident
 
 parseList :: Parser String (Val Var)
-parseList = do
+parseList = annotate $ do
   vs <- braces parser $ commaSep parser parseVal
-  annotate $ A vs
+  return $ A vs
 
   {-
 parseString :: Parser String (Val Var)
 parseString = do
   let toI c = I (fromEnum c)
   vs <- map toI <$> (stringLiteral parser)
-  annotate $ A vs
+  return $ A vs
 -}
 
 parseStruct :: Parser String (Val Var)
-parseStruct = do
+parseStruct = annotate $ do
   let go = do
         typ <- identifier parser
-        ":"   <- operator parser <?> "expected :"
+        reservedOp parser ":"
         v   <- exprParser
         return (typ,v)
   vs <- braces parser $ commaSep parser go
-  annotate $ S (sortStruct vs)
+  return $ S (sortStruct vs)
 
 parseFieldAccess :: Parser String (Exp Var)
-parseFieldAccess = do
+parseFieldAccess = annotate' $ \pos -> do
   var    <-  identifier parser
   field  <-  brackets parser $ identifier parser
-  annotate $ Access (StructPlaceHolder var) var field
+  return $ Access (pos :* StructPlaceHolder var) var field
 
 parseVal :: Parser String (Val Var)
-parseVal = try (reserved parser "True" >> annotate (B True))
-           <|> try (reserved parser "False" >> annotate (B False))
-           <|> try (integer parser >>= annotate . I . fromInteger)
-           <|> try parseStruct
+parseVal = try (annotate $ reserved parser "True" >> return (B True))
+           <|> try (annotate $ reserved parser "False" >> return (B False))
+           <|> try (annotate $ integer parser >>= return . I . fromInteger)
+           <|> parseStruct
            <?> "couldn't parse a value"
   
 
 -- TODO: parse array len
 parseType :: Parser String Type
-parseType =  (reserved parser "bool" >> return Bool)
-         <|> (reserved parser "int" >> return Int)
-         <|> do reserved parser "array"
+parseType =  (annotate $ reserved parser "bool" >> return Bool)
+         <|> (annotate $ reserved parser "int" >> return Int)
+         <|> annotate (
+             do reserved parser "ref"
                 t <- angles parser parseType
-                return $ Array 10 t
-         <|> do reserved parser "struct"
+                return $ Ref t
+             )
+         <|> annotate (
+             do reserved parser "struct"
                 ident <- identifier parser
                 return $ StructPlaceHolder ident
+             )
                 
          <?> "cant parse a type"
 
 
+parseSetRef :: Parser String (Stmt Var)
+parseSetRef = annotate' $ \pos -> do
+  try $ do reservedOp parser "@"
+  ident <- identifier parser
+  reservedOp parser "="
+  e <- exprParser
+  reservedOp parser ";"
+  return $ Set (pos :* VarPlaceHolder ident) ident "#NO_OFFSET" e
+
+parseGetRef :: Parser String (Exp Var)
+parseGetRef = annotate' $ \pos -> do
+  try $ reservedOp parser "@"
+  ident <- identifier parser
+  return $ GetRef (pos :* VarPlaceHolder ident) ident
+
+parseMkRef :: Parser String (Exp Var)
+parseMkRef = annotate' $ \pos -> do
+  try $ reservedOp parser "&"
+  ident <- identifier parser
+  return $ MkRef (pos :* VarPlaceHolder ident) ident
+
+parseVar :: Parser String (Exp Var)
+parseVar = annotate' $ \pos -> do
+  ident <- identifier parser
+  return $ Var (pos :* VarPlaceHolder ident) ident
+
+
 parseTerm :: Parser String (Exp Var)
-parseTerm = try (Const <$> parseVal >>= annotate)
+parseTerm =  try (annotate $ Const <$> parseVal >>= return)
          <|> try (parens parser exprParser)
          <|> try (parseFuncCall)
          <|> try parseFieldAccess
-         <|> try (do
-                    ident <- identifier parser
-                    annotate $ Var (VarPlaceHolder ident) ident
-                 )
-         <?> "expected expression"
+         <|> parseGetRef
+         <|> parseMkRef
+         <|> parseVar
+         <?> "expression"
 
 
   
 
 exprTable = [ [ binExp "/" Div]
-            , [ binExp "%" Div]
+            , [ binExp "%" Mod]
             , [ binExp "*" Times ]
             , [ binExp "+" Plus ]
             , [ binExp "-" Minus ]
@@ -229,7 +280,7 @@ exprTable = [ [ binExp "/" Div]
 
 exprParser :: Parser String (Exp Var)
 exprParser = buildExpressionParser exprTable parseTerm
-             <?> "expected expression"
+             <?> "expression"
 
 ------------------------------------------------------------
 parseStr :: Parser String a -> String -> Either ParseError a 
@@ -245,7 +296,15 @@ sortStruct = L.sortBy (comparing fst)
 sourcePos :: Monad m => ParsecT s u m SourcePos
 sourcePos = statePos `liftM` getParserState
 
-annotate :: f (Annotated f) -> Parser s (Annotated f)
+annotate :: Parser s (f (Annotated f)) -> Parser s (Annotated f)
 annotate a = do
   pos <- sourcePos
-  return (undefined :* a)
+  a'  <- a
+  return (pos :* a')
+
+-- same as above but passes the source pos to parser
+annotate' :: (SourcePos -> Parser s (f (Annotated f))) -> Parser s (Annotated f)
+annotate' a = do
+  pos <- sourcePos
+  a'  <- a pos
+  return (pos :* a')

@@ -23,7 +23,8 @@ struct test fun(struct testtwo i){
 	return i[bb];
 }
 
-int main(){
+int main(int argc){
+	int sink = putChr(argc);
 	struct test beta = { a :20 , b : 33 };
 	struct test theta = testSum( { b : 1000, a:2000}
 	       	    	    	    ,testSum(beta,foo(666,777)
@@ -37,5 +38,20 @@ int main(){
 	struct test baka = fun({ bb : beta, aa : 101010 });
 	sink = putChr(baka[b]);
 	sink = putChr(beta[b]);
+	sink = putChr(beta[a]);
+	beta[b] = 2222;
+	beta[a] = 9999;
+	sink = putChr(beta[b]);
+	sink = putChr(beta[a]);
+
+	sink = putChr(333);
+	sink = putChr(333);
+
+	struct testtwo tuka = { bb : beta, aa : 212121};
+	tuka[bb] = { a: 89, b : 98 };
+
+	struct test four = tuka[bb];
+	sink = putChr(four[a]);
+	sink = putChr(four[b]);
 	return 10;
 	}

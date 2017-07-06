@@ -1,14 +1,24 @@
 int fac(int a){ 
-   a = a +1 - 1;
+   a = (a + 1 - 1);
    int count = a; 
    int result = 1; 
    while(  count > 0){ 
      int result = result * count; 
      int count = count - 1; 
-   } 
+    
    return result; 
+   }
  } 
- int main(){
-		 int o = putChr(fac(5));
-		 return 0;
+ int main(int argc){
+	int o = 0;
+	if(argc % 2  == 0){
+	  o = fac(5);
+	} else if (argc > 3) {
+	  o = 20;
+	} else {
+	  o = 40;
+	}
+	int sink = putChr(o);
+	return 200;
+
  }

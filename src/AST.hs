@@ -12,16 +12,15 @@ import Text.Parsec.Pos
 import Debug.Trace
 
 
-data Annotation = Annotation
-  { line :: Int
-  , col  :: Int
-  , src  :: String
-  } deriving Show
 
 data Annotated f = SourcePos :*  f (Annotated f) 
+data Raw f = R (f (Raw f))
+instance Show (f (Raw f)) => Show (Raw f) where
+  show (R f) = show f
 
 instance Show (f (Annotated f)) => Show (Annotated f) where
-  show (_ :* f) = show f
+  --show (a :* f) = show a ++ show f
+  show (a :* f) = show f
 instance Eq (f (Annotated f)) => Eq (Annotated f) where
   (_ :* a) == (_ :* b) = a == b
 
@@ -35,27 +34,30 @@ data Definition' var stmt = ProcDef String [(var,Type)] Type [Stmt var]
 
 type Stmt a = Annotated (Stmt' a)
 data Stmt' var stmt = VarDef Type var (Exp var)
-          | If Int (Exp var) [stmt] [stmt]
-          | While Int (Exp var) [stmt]
-          | Return (Exp var)
-          | VoidReturn 
-            deriving (Show, Eq, Functor)
+                    | If Int (Exp var) [stmt] [stmt]
+                    | While Int (Exp var) [stmt]
+                    | Return (Exp var)
+                    | Set Type  var var (Exp var)-- Type var, offset(s) 
+                    | VoidReturn 
+                    deriving (Show, Eq, Functor)
 
 type Exp a = Annotated (Exp' a)
 data Exp' var exp = Const (Val var)
-         | Var Type  var 
-         | Access Type  var var -- Type var, offset(s) 
-         | Bin Op exp exp 
-         | IfE Int exp exp exp  -- used to expand "Or" statements etc
-         | ProcCall Type [exp] String
-           deriving (Show, Eq, Functor)
+                  | Var Type  var 
+                  | MkRef Type  var 
+                  | GetRef Type  var 
+                  | Access Type  var var -- Type var, offset(s) 
+                  | Bin Op exp exp 
+                  | IfE Int exp exp exp  -- used to expand "Or" statements etc
+                  | ProcCall Type [exp] String
+                  deriving (Show, Eq, Functor)
 
 type Val a = Annotated (Val' a)
 data Val' var fix = I Int 
-      | B Bool 
-      | A [fix] 
-      | S [(Var, Exp var)]
-      deriving (Show, Eq, Functor)
+                  | B Bool 
+                  | A [fix] 
+                  | S [(Var, Exp var)]
+                  deriving (Show, Eq, Functor)
 
 data Op = Plus | Minus | Times | Div | Mod | And | Or | Lt | Gt | Eq | Index | Append
           deriving (Show, Eq, Read)
@@ -65,11 +67,14 @@ A procedure is recursive so it can have a return type. This means that procedure
 procedures are possible although these are not that useful at this stage.
 -}
 
-data Type = Bool 
+type Type = Annotated Type' 
+type RawType = Raw Type' 
+data Type' typ = Bool 
           | Int 
-          | Array Int Type 
-          | Struct [(Var,Type)]
-          | Proc [(Var,Type)] Type 
+          | Array Int typ 
+          | Struct [(Var,typ)]
+          | Proc [(Var,typ)] typ 
+          | Ref typ
           | TVar String
           -- A TVar after substitution, signals that it should not be changed
           | TConst String 
@@ -79,7 +84,7 @@ data Type = Bool
           | ProcPlaceHolder Var
           -- A special type used to store info about a converted procedure that returns a struc
           | SpecReturn Int
-          deriving(Show,Eq)
+          deriving(Show,Eq,Functor)
 
 {-
 The store is a list of variable names and their values. 
@@ -118,21 +123,27 @@ renameProg p = fst $ runState go st
         go = mapM renameDef p
 
 renameExp :: Exp Var -> RenameM (Exp Int) 
-renameExp (co -> (exp, ann)) = ann <$> case exp of
-       Access t@(Struct ss) v off  ->  do
+renameExp a@(co -> (exp, ann)) = ann <$> case exp of
+       Access t@(_ :* Struct ss) v off  ->  do
          v' <- changeVar t v
          let off' = lookupStructField ss off
          -- here we also retype the struct to reflect
          -- the return type of the access
          case lookup off ss of
            Just t' -> return (Access t' v' off')
-           Nothing -> error "struct access with improper fields"
+           Nothing -> annotatedError a "struct access with improper fields"
 
-       Access t v off -> error "struct access with bad type"
+       Access t v off -> annotatedError a "struct access with bad type"
 
        Var t v -> do
          v' <- changeVar t v
          return (Var t v')
+       MkRef t v -> do
+         v' <- changeVar t v
+         return (MkRef t v')
+       GetRef t v -> do
+         v' <- changeVar t v
+         return (GetRef t v')
 
        ProcCall t exps n  ->  do
          exps' <- mapM renameExp exps
@@ -183,7 +194,26 @@ renameDef (co -> (def, ann)) = ann <$> case def of
   
 
 rename :: Stmt String -> RenameM (Stmt Int)
-rename (co -> (stmt,ann)) = ann <$> case stmt of
+rename a@(co -> (stmt,ann)) = ann <$> case stmt of
+  Set t@(_ :* Struct ss) v off exp ->  do
+    v' <- changeVar t v
+    exp' <- renameExp exp
+    let off' = lookupStructField ss off
+    -- here we also retype the struct to reflect
+    -- the return type of the access
+    case lookup off ss of
+      Just t' -> return (Set t' v' off' exp')
+      Nothing -> annotatedError a "struct access with improper fields"
+
+  Set t@(_ :* Ref ss) v off exp ->  do
+    v' <- changeVar t v
+    exp' <- renameExp exp
+    -- here we also retype the struct to reflect
+    -- the return type of the access
+    return (Set t v' 0 exp')
+
+  Set t v off _ -> annotatedError a "struct access with bad type"
+
   Return exp -> renameExp exp >>= (return . Return)
   If l exp stmts stmts2 -> do
     exp' <- renameExp exp
@@ -280,6 +310,9 @@ setLabel (co -> (stmt,ann)) = ann <$> case stmt of
          exp' <- setLabelExp exp
          return (Return exp')
        VoidReturn  -> return VoidReturn
+       Set typ l off exp  -> do
+         exp' <- setLabelExp exp
+         return (Set typ l off exp')
 
 setLabelDef :: Definition v -> LabelM (Definition v)
 setLabelDef (co -> (stmt, ann)) = ann <$> case stmt of
@@ -313,7 +346,7 @@ getAllVarDefs (_ :* stmt) = case stmt of
   While _ _ th -> concatMap getAllVarDefs th
   _                   -> []
           
---TODO check against bad type matches
+--TODO check against bad type matches. This could be called on a list of stmts instead.
 sizeLocalVars :: Ord v => Definition v -> Int
 sizeLocalVars (_ :* ProcDef _ _ _ stmts) = sum (map sizeOf vars)
   where asgns = concatMap getAllVarDefs stmts
@@ -324,9 +357,10 @@ sizeArgList args = sum (map (sizeOf . snd) args)
 
 
 sizeOf :: Type -> Int
-sizeOf typ = case typ of
+sizeOf (_ :* typ) = case typ of
     Bool -> 4
     Int  -> 4
+    Ref _ -> 4
     Array l t -> l * sizeOf t
     Struct vs -> sum $ map (sizeOf . snd) vs
     Proc _ _ -> 4
@@ -334,8 +368,8 @@ sizeOf typ = case typ of
 
 makeGlobalContext :: [Definition Var] -> [(Var,Type)]
 makeGlobalContext = map go
-  where go (_ :* ProcDef i a t _) = (i, Proc a t )
-        go (_ :* StructDef i a) = (i, Struct a)
+  where go (an :* ProcDef i a t _) = (i, an :* Proc a t )
+        go (an :* StructDef i a) = (i, an :* Struct a)
 
 
 getAllFuncDefs = filter isFunc
@@ -350,7 +384,8 @@ getAllFuncDefs = filter isFunc
 convertStructReturning :: Definition Var -> Definition Var
 convertStructReturning (co -> (def, ann))= ann $ case def of
 
-  ProcDef n args ty@Struct{} stmts -> (ProcDef n args' (SpecReturn size) stmts')
+  ProcDef n args ty@(co -> (Struct{},ann)) stmts ->
+           (ProcDef n args' (ann $ SpecReturn size) stmts')
     where args' = args ++ [("#ret", ty)]
           size = sizeOf ty
           stmts' = concatMap (changeReturns ty) stmts
@@ -380,3 +415,18 @@ co  (a :* b) = (b, annotate_ a)
   
 flatten (a :* b) = b
 flatten2 (a :* b) = flatten <$> b
+
+annotatedError (ann :* _) msg = error $ show ann ++ msg
+
+class Functor f => ToRaw f where
+  toRaw :: f a -> Raw f
+
+instance ToRaw (Type' )where
+  toRaw f = R ((toRaw . const Int) <$> f)
+  
+
+class Functor f => ToAnnotated f where
+  toAnn :: SourcePos -> f a -> Annotated f
+
+instance ToAnnotated (Type' )where
+  toAnn ann f = ann :* ((toAnn ann . const Int) <$> f)

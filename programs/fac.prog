@@ -7,7 +7,7 @@ int fac(int a){
 	return a;
 } 
 
-int main(){
-		int o = putChr(fac(5));
+int main(int argc){
+		int o = putChr(fac(argc));
 		return 0;
 }
