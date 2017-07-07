@@ -152,11 +152,11 @@ showVal a@(_ :* v) = case v of
 
 --expToAsm (_ :* exp) = case exp of
 expToAsm (_ :* exp) = case exp of
-  Const (_ :* S vs)              ->  loadStructImm vs
-  Const v                        ->  loadIToAsm (showVal v)
-  Access s@(_:* Struct{}) v off  ->  loadStructOff v (sizeOf s) off
-  Access _ v off                 ->  loadToAsmOff (showVariable v) off
-  Var s@(_:* Struct _) v         ->  loadStruct v (sizeOf s)
+  Const (_ :* S vs)                    ->  loadStructImm vs
+  Const v                              ->  loadIToAsm (showVal v)
+  Access s@(_:* Struct{}) v (Off off)  ->  loadStructOff v (sizeOf s) off
+  Access _ v (Off off)                 ->  loadToAsmOff (showVariable v) off
+  Var s@(_:* Struct _) v               ->  loadStruct v (sizeOf s)
 
   Var _ v       -> loadToAsm (showVariable v)
   MkRef _ v     -> makeRef (showVariable v)
@@ -203,7 +203,7 @@ stmtToAsm (_ :* stmt) = case stmt of
                             , "mov " ++ showVariable v ++ ", ecx"]
   VarDef _ v exp -> expToAsm exp ++ storeToAsm v
   
-  Set s@(_:* Struct{}) v off e -> expToAsm e ++ storeStructOff v (sizeOf s) off
+  Set s@(_:* Struct{}) v (Off off) e -> expToAsm e ++ storeStructOff v (sizeOf s) off
 
   -- TODO set Struct
   Set (_:* Ref s@(_:* Struct{})) v off e ->
@@ -211,7 +211,7 @@ stmtToAsm (_ :* stmt) = case stmt of
 
   Set s@(_:* Ref{}) v off e -> expToAsm e ++ setRef (showVariable v) 
   
-  Set _ v off e                -> expToAsm e ++ storeToAsmOff (showVariable v) off
+  Set _ v (Off off) e                -> expToAsm e ++ storeToAsmOff (showVariable v) off
 
   If l exp th el -> expToAsm exp ++ cnd  ++ stmtsT ++ stmtsE
     where elL = ".IF_EL_" ++ show l

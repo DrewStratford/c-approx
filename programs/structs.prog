@@ -24,7 +24,6 @@ struct test fun(struct testtwo i){
 }
 
 int main(int argc){
-	int sink = putChr(argc);
 	struct test beta = { a :20 , b : 33 };
 	struct test theta = testSum( { b : 1000, a:2000}
 	       	    	    	    ,testSum(beta,foo(666,777)

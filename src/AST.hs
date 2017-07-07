@@ -37,7 +37,7 @@ data Stmt' var stmt = VarDef Type var (Exp var)
                     | If Int (Exp var) [stmt] [stmt]
                     | While Int (Exp var) [stmt]
                     | Return (Exp var)
-                    | Set Type  var var (Exp var)-- Type var, offset(s) 
+                    | Set Type  var (Offset var) (Exp var)-- Type var, offset(s) 
                     | VoidReturn 
                     deriving (Show, Eq, Functor)
 
@@ -46,7 +46,7 @@ data Exp' var exp = Const (Val var)
                   | Var Type  var 
                   | MkRef Type  var 
                   | GetRef Type  var 
-                  | Access Type  var var -- Type var, offset(s) 
+                  | Access Type  var (Offset var) -- Type var, offset(s) 
                   | Bin Op exp exp 
                   | IfE Int exp exp exp  -- used to expand "Or" statements etc
                   | ProcCall Type [exp] String
@@ -58,6 +58,11 @@ data Val' var fix = I Int
                   | A [fix] 
                   | S [(Var, Exp var)]
                   deriving (Show, Eq, Functor)
+
+data Offset var = Off var | NestedOff var (Offset var)
+  deriving (Show, Eq, Functor)
+
+
 
 data Op = Plus | Minus | Times | Div | Mod | And | Or | Lt | Gt | Eq | Index | Append
           deriving (Show, Eq, Read)
@@ -126,10 +131,10 @@ renameExp :: Exp Var -> RenameM (Exp Int)
 renameExp a@(co -> (exp, ann)) = ann <$> case exp of
        Access t@(_ :* Struct ss) v off  ->  do
          v' <- changeVar t v
-         let off' = lookupStructField ss off
+         let off' = simplifyOffset ss off
          -- here we also retype the struct to reflect
          -- the return type of the access
-         case lookup off ss of
+         case (getFieldType ss off) of
            Just t' -> return (Access t' v' off')
            Nothing -> annotatedError a "struct access with improper fields"
 
@@ -198,19 +203,19 @@ rename a@(co -> (stmt,ann)) = ann <$> case stmt of
   Set t@(_ :* Struct ss) v off exp ->  do
     v' <- changeVar t v
     exp' <- renameExp exp
-    let off' = lookupStructField ss off
+    let off' = simplifyOffset ss off
     -- here we also retype the struct to reflect
     -- the return type of the access
-    case lookup off ss of
+    case  (getFieldType ss off) of
       Just t' -> return (Set t' v' off' exp')
-      Nothing -> annotatedError a "struct access with improper fields"
+      Nothing -> annotatedError a "struct set with improper fields"
 
   Set t@(_ :* Ref ss) v off exp ->  do
     v' <- changeVar t v
     exp' <- renameExp exp
     -- here we also retype the struct to reflect
     -- the return type of the access
-    return (Set t v' 0 exp')
+    return (Set t v' (Off 0) exp')
 
   Set t v off _ -> annotatedError a "struct access with bad type"
 
@@ -259,12 +264,28 @@ changeVar typ v = do
       incSp (sizeOf typ)
       return sp
 
-
+-- NOTE: this only works properly if the struct actually contains the field
 lookupStructField :: [(Var,Type)] -> Var -> Int
 lookupStructField typs var = sum $ map (sizeOf . snd) a
   where (a, _) = break go typs
         go (x,_) = x == var
-  
+
+simplifyOffset :: [(Var, Type)] -> Offset Var -> Offset Int
+simplifyOffset ts (Off off) = Off $ lookupStructField ts off
+simplifyOffset ts (NestedOff off offs) = 
+  let off' = lookupStructField ts off
+  in case lookup off ts of
+    Just (_:* Struct ts') -> (off' +) <$> simplifyOffset ts' offs
+    _ -> Off off'
+
+getFieldType :: [(Var, Type)] -> Offset Var -> Maybe Type
+getFieldType ts (Off off) = lookup off ts
+getFieldType ts (NestedOff off offs) = do
+  t <- lookup off ts
+  case t of
+    (_:* Struct ts') -> getFieldType ts' offs
+    _ -> Nothing
+    
 
 ----------------------------------------------------------------------
   -- set the numbering for IF and WHILE stmts. Useful for generating labels.

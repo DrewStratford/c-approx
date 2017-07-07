@@ -127,11 +127,12 @@ parseIf = annotate $ do
 parseFieldAssign :: Parser String (Stmt Var)
 parseFieldAssign = annotate' $ \pos -> do
   var    <-  identifier parser
-  field  <-  brackets parser $ identifier parser
+  --field  <-  brackets parser $ identifier parser
+  offset  <-  parseAccessor
   reservedOp parser "=" 
   e <- exprParser
   reservedOp parser ";"
-  return $ Set (pos :* StructPlaceHolder var) var field e
+  return $ Set (pos :* StructPlaceHolder var) var offset e
 
 
 parseStmt :: Parser String (Stmt Var)
@@ -182,6 +183,16 @@ parseString = do
   return $ A vs
 -}
 
+parseAccessor :: Parser String (Offset Var)
+parseAccessor = do
+  let access = brackets parser $ identifier parser
+      toOffset [] =
+        error "Parser error: this shouldn't happen because we should parse at least one field"
+      toOffset [a] = Off a
+      toOffset (a:as) = NestedOff a (toOffset as)
+  toOffset <$> many1 access
+  
+
 parseStruct :: Parser String (Val Var)
 parseStruct = annotate $ do
   let go = do
@@ -195,8 +206,9 @@ parseStruct = annotate $ do
 parseFieldAccess :: Parser String (Exp Var)
 parseFieldAccess = annotate' $ \pos -> do
   var    <-  identifier parser
-  field  <-  brackets parser $ identifier parser
-  return $ Access (pos :* StructPlaceHolder var) var field
+  --field  <-  brackets parser $ identifier parser
+  offset  <-  parseAccessor
+  return $ Access (pos :* StructPlaceHolder var) var offset
 
 parseVal :: Parser String (Val Var)
 parseVal = try (annotate $ reserved parser "True" >> return (B True))
@@ -231,7 +243,7 @@ parseSetRef = annotate' $ \pos -> do
   reservedOp parser "="
   e <- exprParser
   reservedOp parser ";"
-  return $ Set (pos :* VarPlaceHolder ident) ident "#NO_OFFSET" e
+  return $ Set (pos :* VarPlaceHolder ident) ident (Off "#NO_OFFSET") e
 
 parseGetRef :: Parser String (Exp Var)
 parseGetRef = annotate' $ \pos -> do
