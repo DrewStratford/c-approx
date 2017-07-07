@@ -105,7 +105,18 @@ getStructRef i size = concatMap getRefOff ([0,4 .. size -1])
           , "mov ecx, [ecx+" ++ show x ++ "]"
           , "push ecx"
           ]
-  
+
+
+setStructRef :: Var -> Int -> [String]
+setStructRef i size =
+    setUp ++ concatMap go (reverse [0,4 .. size -1])
+  where go x = [ "pop ecx"
+               , "mov " ++ showRef x ++ ", ecx"
+               ]
+        setUp = ["mov edx, " ++ i]
+        showRef x = "[edx -" ++ show x ++ "]"
+
+
 loadStructOff :: Int -> Int -> Int -> [String]
 loadStructOff start size off =
     setUp ++ concatMap go ([0,4 .. size -1])
@@ -185,7 +196,7 @@ showVariable x = if x < 0
 stmtToAsm :: Stmt Int -> [String]
 stmtToAsm (_ :* stmt) = case stmt of
   VarDef s@(_:* Struct vs) v exp -> expToAsm exp ++ storeStruct v (sizeOf s)
-  --VarDef _ v (Const val) -> ["mov ecx, " ++ showVal val, "mov " ++ v ++ ", ecx"]
+
   VarDef _ v (_ :* Const val) -> ["mov ecx, " ++ showVal val
                             , "mov " ++ showVariable v ++ ", ecx"]
   VarDef _ v (_ :* Var _ var) -> ["mov ecx, " ++ showVariable var
@@ -195,6 +206,9 @@ stmtToAsm (_ :* stmt) = case stmt of
   Set s@(_:* Struct{}) v off e -> expToAsm e ++ storeStructOff v (sizeOf s) off
 
   -- TODO set Struct
+  Set (_:* Ref s@(_:* Struct{})) v off e ->
+    ";chuckya" :expToAsm e ++ setStructRef (showVariable v) (sizeOf s) ++ [";CHUCKYA"]
+
   Set s@(_:* Ref{}) v off e -> expToAsm e ++ setRef (showVariable v) 
   
   Set _ v off e                -> expToAsm e ++ storeToAsmOff (showVariable v) off
