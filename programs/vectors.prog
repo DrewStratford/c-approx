@@ -1,0 +1,61 @@
+struct Vec2 {
+  int x,
+  int y
+} 
+
+
+/*
+   A small file implementing 2d vectors
+   and the basic operations on them.
+*/
+
+
+struct Vec2 add(struct Vec2 a, struct Vec2 b){
+  return { x : a[x] + b[x], y : a[y] + b[y]};
+}
+
+struct Vec2 minus(struct Vec2 a, struct Vec2 b){
+  int outX = a[x] - b[x];
+  int outY = a[y] - b[y];
+  return { x : outX, y : outY};
+}
+
+int dot(struct Vec2 a, struct Vec2 b){
+  return (a[x] * b[x]) + (a[y]*b[y]);
+}
+
+struct Vec2 scalar(int mult, struct Vec2 a){
+  int outX = a[x] * mult;
+  int outY = a[y] * mult;
+  a[x] = outX;
+  a[y] = outY;
+  return a;
+}
+
+  
+
+struct Vec2 vector2(int a, int b){
+  return {x : a, y : b };
+}
+
+int printVector(struct Vec2 vec){
+    int sink = 0;
+    sink = putChr(vec[x]);
+    sink = putChr(vec[y]);
+    return 0;
+}
+
+
+int main(int argc){
+    int sink = 0; // this is just a dummy value for printing
+
+    struct Vec2 vec = vector2(2,5);
+    struct Vec2 vectah = add(vec, {x : 1, y :1});
+
+    sink = printVector(vec);
+    sink = putChr(argc);
+    sink = printVector(vectah);
+    return argc;
+}
+
+    

@@ -1,0 +1,36 @@
+struct test{
+       int a,
+       int b
+}
+
+int go(ref<int> r){
+    @r = 333;
+    return 1;
+}
+
+int goS(ref<struct test> r){
+    struct test c = @r;
+    int sink = putChr(c[a]);
+    int sink = putChr(c[b]);
+    c[b] = c[b]+100;
+    @r = c;
+    return 1;
+}
+
+int main(){
+    int i = 222;
+    ref<int> r = &i;
+    int sink = putChr(@r);
+    //sink = putChr(i);
+    //sink = go(r);
+    //sink = putChr(@r);
+    //sink = putChr(i);
+
+    struct test beta = {a : 11, b:22};
+    sink = putChr(beta[a]);
+    sink = putChr(beta[b]);
+    sink = goS(&beta);
+    sink = putChr(beta[a]);
+    sink = putChr(beta[b]);
+    return 0;
+}
