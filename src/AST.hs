@@ -29,8 +29,8 @@ type Prog var = [Definition var]
 
 type Definition a = Annotated (Definition' a)
 data Definition' var stmt = ProcDef String [(var,Type)] Type [Stmt var]
-                | StructDef String [(Var,Type)] 
-                deriving (Show, Eq, Functor)
+                          | StructDef String [(Var,Type)] 
+                          deriving (Show, Eq, Functor)
 
 type Stmt a = Annotated (Stmt' a)
 data Stmt' var stmt = VarDef Type var (Exp var)
@@ -135,8 +135,8 @@ renameExp a@(co -> (exp, ann)) = ann <$> case exp of
          -- here we also retype the struct to reflect
          -- the return type of the access
          case (getFieldType ss off) of
-           Just t' -> return (Access t' v' off')
-           Nothing -> annotatedError a "struct access with improper fields"
+           Right t'   -> return (Access t' v' off')
+           Left field -> annotatedError a ("struct access with improper fields" ++ field)
 
        Access t v off -> annotatedError a "struct access with bad type"
 
@@ -207,8 +207,8 @@ rename a@(co -> (stmt,ann)) = ann <$> case stmt of
     -- here we also retype the struct to reflect
     -- the return type of the access
     case  (getFieldType ss off) of
-      Just t' -> return (Set t' v' off' exp')
-      Nothing -> annotatedError a "struct set with improper fields"
+      Right t'   -> return (Set t' v' off' exp')
+      Left field -> annotatedError a ("struct set with improper fields" ++ field)
 
   Set t@(_ :* Ref ss) v off exp ->  do
     v' <- changeVar t v
@@ -278,13 +278,15 @@ simplifyOffset ts (NestedOff off offs) =
     Just (_:* Struct ts') -> (off' +) <$> simplifyOffset ts' offs
     _ -> Off off'
 
-getFieldType :: [(Var, Type)] -> Offset Var -> Maybe Type
-getFieldType ts (Off off) = lookup off ts
-getFieldType ts (NestedOff off offs) = do
-  t <- lookup off ts
-  case t of
-    (_:* Struct ts') -> getFieldType ts' offs
-    _ -> Nothing
+getFieldType :: [(Var, Type)] -> Offset Var -> Either String Type
+getFieldType ts (Off off) = case lookup off ts of
+  Nothing -> Left off
+  Just a  -> return a
+getFieldType ts (NestedOff off offs) = 
+  let t = lookup off ts
+  in case t of
+    Just (_:* Struct ts') -> getFieldType ts' offs
+    _ -> Left off
     
 
 ----------------------------------------------------------------------

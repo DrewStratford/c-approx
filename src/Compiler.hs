@@ -3,6 +3,7 @@ import Control.Monad.State as S
 import qualified Data.List as L
 import System.Environment
 import System.IO
+import System.Exit
 import Text.Parsec
 import Text.Parsec.Pos
 
@@ -27,14 +28,22 @@ main = do
     Left err -> print err
     Right ast' -> do
         let cntxt = builtinFuncs ++ makeGlobalContext ast'
-            returns prog = handleStructs <$>  (expandTypeProg cntxt prog)
+            -- returns Left on error
+            expandAndTypeCheck prog = do
+              prog' <- expandTypeProg cntxt prog
+              typeCheckProg cntxt prog'
+              return prog'
+            returns prog = handleStructs <$> expandAndTypeCheck prog 
+                             
             expanded :: Either String (Prog Var)
             expanded = returns $ ast'
-            renamed = renameProg <$> expanded
+            renamed  = renameProg <$> expanded
             compiled = compileAll <$> labelProg <$> renamed
             --compiled = labelProg <$> renamed
         case compiled of
-          Left err -> print err
+          Left err -> do
+            die err
+            
           Right compiled' -> do
             putStrLn header
             putStrLn message
@@ -178,7 +187,6 @@ expToAsm (_ :* exp) = case exp of
 
   ProcCall (_:* Proc args ret) exps name ->
     concatMap expToAsm (reverse exps)++ ["call " ++ name, cleanUp, "push eax"]
-    --where cleanUp = "add esp," ++ show (4 * length exps)
     where cleanUp = "add esp," ++ show (sizeArgList args)
 
   IfE l exp th el -> expToAsm exp ++ cnd  ++ stmtsT ++ stmtsE
@@ -283,8 +291,8 @@ get' = concat
   , "ret"
   ]
 
-builtinFuncs = [("putChr", go $ Proc [("",Int)] Int)
-               ,("set",    go $ Proc [("",Int),("",Int)] Int)
+builtinFuncs = [ ("putChr", go $ Proc [("",Int)] Int)
+               , ("set",    go $ Proc [("",Int),("",Int)] Int)
                , ("get",   go $ Proc [("",Int)] Int)
                ]
   where go = toAnn (newPos "builtin" 0 0)

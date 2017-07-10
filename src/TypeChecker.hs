@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 module TypeChecker where
 
 import AST
@@ -5,85 +6,152 @@ import Control.Monad
 import Control.Monad.State as S
 import qualified Data.List as L
 
+import Debug.Trace
+
 import Text.Parsec.Pos
 
 type Context = [(Var, Type)]
 
-{-
-subType :: String -> Type -> Type -> Type
-subType i repl typ =
-  let recur  = subType i repl
-      recur' = subTypeTup i repl
-  in case typ of
-    TVar i' | i == i'     -> makeConst repl
-    TVar j                -> TVar j
-    TConst j              -> TConst j
-    Array size t'         -> Array size (recur t')
-    Proc types t          -> Proc (map recur' types) (recur t)
-    Struct types          -> Struct (map recur' types)
-    Int                   -> Int
-    Bool                  -> Bool
-    -- these should never come up as they should be expanded
-    v@VarPlaceHolder{}    -> v
-    v@StructPlaceHolder{} -> v
-    v@ProcPlaceHolder{}   -> v
-
-
-subTypeTup :: String -> Type -> (a, Type) -> (a,Type)
-subTypeTup i repl (a, typ) = (a, subType i repl typ)
-
-
--- Attempts to unify two types and return the result (t2 must be a subset of t1)
-unifyType :: Type -> Type -> Maybe Type
-unifyType t1 t2 = case (t1, t2) of
-  -- a tvar on the right can be anything
-  (TVar i, tr)             -> return tr
-  -- a Tvar on the right will not match with anything
-  (_, TVar _)              -> Nothing
-  (Struct as, Struct bs)   -> do
-                              a <- unifyList (map snd as) (map snd bs)
-                              return $ Struct (zip (map fst as) a)
-  (Proc as ra, Proc bs rb) -> do
-                              a <- unifyList (map snd as ++ [ra]) (map snd bs ++ [rb])
-                              ret <- safeLast a
-                              let args = zip (map fst bs) (init a)
-                              return (Proc args ret)
-
-  _ | t1 == t2             -> return t1
-  _                        -> Nothing
-
-
-
-unifyList :: [Type] -> [Type] -> Maybe [Type]
-unifyList [] [] = return []
-unifyList []  _ = Nothing
-unifyList ts [] = return ts
-unifyList (a:as) (b:bs) =
-  let remaining = unifyList as bs
-      subbed s t = return (b:) <*> unifyList (map (subType s t) as) bs
-  in case (a,b) of
-    (TVar i, t)  -> subbed i t
-    (x, y)       -> do
-                    t' <- x `unifyType` y
-                    (t':) <$> remaining
-
-  
-makeConst :: Type -> Type
-makeConst (TVar t) = TConst t
-makeConst a        = a
--}
 
 safeLast [] = Nothing
 safeLast a  = Just (last a)
 
 
+type ContextM a = S.StateT Context (Either String) a
 
+getTypeVal :: Val String -> ContextM Type
+getTypeVal (co -> (val,ann)) = ann <$> case val of
+       B b -> return Bool
+       I b -> return Int
+       A vs -> error "implement arrays"
+       S elems -> do
+         let (ns, vs) = unzip elems
+         vs' <- mapM getTypeExp vs
+         return (Struct $ zip ns vs')
 
+getTypeBinOp :: Op -> Type -> Type -> ContextM Type
+getTypeBinOp op l r = case (l, op, r) of
+  (ann :* Int, Plus, _:* Int)  -> return $ ann :* Int
+  (ann :* Int, Minus, _:* Int) -> return $ ann :* Int
+  (ann :* Int, Times, _:* Int) -> return $ ann :* Int
+  (ann :* Int, Div, _:* Int)   -> return $ ann :* Int
+  (ann :* Int, Mod, _:* Int)   -> return $ ann :* Int
+  (ann :* Int, Lt, _:* Int)    -> return $ ann :* Bool
+  (ann :* Int, Gt, _:* Int)    -> return $ ann :* Bool
+  (ann :* Int, Eq, _:* Int)    -> return $ ann :* Bool
+  (ann :* Bool, Eq, _:* Bool)  -> return $ ann :* Bool
+  (ann :* Ref{}, Eq, _:* Ref{}) -> return $ ann :* Bool
+  (ann :* _, _, _ )            -> typeError ann "misapplied operator"
+
+getTypeExp :: (Exp Var) -> ContextM Type
+getTypeExp (ann :* exp) = case exp of
+       Bin op l r -> do
+         l' <- getTypeExp l
+         r' <- getTypeExp r
+         getTypeBinOp op l' r' 
+       IfE _ c th el -> do
+         (_ :* cond) <- getTypeExp c
+         if cond == Bool
+           then do
+           th' <- getTypeExp th
+           el' <- getTypeExp el
+           if th' == el'
+             then return th'
+             else typeError ann "IfE expressions aren't the same type"
+
+           else typeError ann "condition in If doesn't return bool"
+       ProcCall (ann :* Proc argTypes retType) args name -> do
+         args' <- mapM getTypeExp args
+         if args' == (map snd argTypes)
+           then return retType
+           else typeError ann $ "badly typed arguments in call:" ++ name
+       Access typ@(ann:* Struct fieldTypes) v off -> do
+         varTyp <- lookupType ann v
+         if varTyp == typ
+           then lift (getFieldType fieldTypes off)
+           else typeError ann "variable doesn't match struct type"
+       Var typ v            -> return typ
+       MkRef typ v          -> return typ
+       GetRef (_:* Ref t) v -> return t
+       Const val            -> getTypeVal val
+
+       nonRecursive -> typeError ann "cant type expression"
+
+getTypeStmt :: Type -> Stmt Var -> ContextM ()
+getTypeStmt returnType (ann :* stmt) = case stmt of
+  Set (_:* Ref t) v _ exp -> do
+    exp' <- getTypeExp exp
+    if t == exp'
+      then return ()
+      else typeError ann "setting reference with wrong type"
+  Set s@(ann:* Struct fieldTypes) v off exp -> do
+    varTyp <- lookupType ann v
+    fieldType <- lift (getFieldType fieldTypes off)
+    exp'      <- getTypeExp exp
+    if varTyp == s && fieldType == exp'
+      then return ()
+      else typeError ann "setting variable doesn't match struct type"
+  If _ c th el -> do
+    (_ :* cond) <- getTypeExp c
+    if cond == Bool
+      then do
+      th' <- mapM (getTypeStmt returnType) th
+      el' <- mapM (getTypeStmt returnType) el
+      return ()
+    else typeError ann "condition in If doesn't return bool"
+  While _ c th -> do
+    (_ :* cond) <- getTypeExp c
+    if cond == Bool
+      then do
+      th' <- mapM (getTypeStmt returnType) th
+      return ()
+    else typeError ann "condition in If doesn't return bool"
+  VarDef typ var exp -> do
+    expType <- getTypeExp exp
+    if typ == expType
+      then insertType (var, typ)
+      else typeError ann "exp doesn't match type its being assigned to"
+  VoidReturn -> return ()
+  Return exp  -> do
+    exp' <- getTypeExp exp
+    if exp' == returnType
+      then return ()
+      else typeError ann "exp doesn't match return type"
+  
+getTypeDef :: Definition Var -> ContextM ()
+getTypeDef (ann :* def) = case def of
+  StructDef{} -> return ()
+  ProcDef name args returnType stmts -> do
+    oldCntxt <- get
+    insertTypes args
+    mapM_ (getTypeStmt returnType) stmts
+    checkForGuranteedReturn ann stmts
+    put oldCntxt
+
+typeCheckProg :: Context -> Prog Var -> Either String ()
+typeCheckProg context prog = fst <$> runStateT (mapM_ getTypeDef prog) context
+  
+
+{- we need to check that all functions gurantee a return -}
+
+checkForGuranteedReturn :: SourcePos -> [Stmt a] -> ContextM ()
+checkForGuranteedReturn ann stmts = if doesReturn
+  then return ()
+  else typeError ann "function does not gurantee return"
+  where doesReturn = any isReturn stmts
+{-
+Small helper to check return types. We consider an if statment where both branches return to be
+suitable.
+-}
+
+isReturn :: Stmt a -> Bool
+isReturn (_ :* Return _) = True
+isReturn (_ :* If _ _ th el) = any isReturn th && any isReturn el
+isReturn _          = False
 {-
 expands the types of statements so that there are no place holder types
 -}
 
-type ContextM a = S.StateT Context (Either String) a
 
 expandTypeExp :: (Exp Var) -> ContextM (Exp Var)
 expandTypeExp (ann :* exp) =
@@ -119,8 +187,8 @@ expandTypeExp (ann :* exp) =
          typ' <- lookupType ann t >>= typeExpand
          return' (Var typ' v)
        MkRef (_:* VarPlaceHolder t) v -> do
-         typ' <- lookupType ann t >>= typeExpand
-         return' (MkRef typ' v)
+         t'@(ann :* typ') <- lookupType ann t >>= typeExpand
+         return' (MkRef (ann :* Ref t') v)
        MkRef (_:* StructPlaceHolder t) v -> do
          typ' <- lookupType ann t >>= typeExpand
          return' (MkRef typ' v)
@@ -261,3 +329,6 @@ insertType typ = do
 
 insertTypes :: Context -> ContextM ()
 insertTypes = mapM_ insertType
+
+
+typeError ann msg = lift $ Left $ show ann ++ ": type error " ++ msg 

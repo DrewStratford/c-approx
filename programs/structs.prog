@@ -9,7 +9,7 @@ struct testtwo{
 }
 
 struct test foo(int x, int y){
-	return {a : x, b : y};
+	return {b : y, a : x};
 	}
 
 
