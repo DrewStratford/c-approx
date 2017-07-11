@@ -25,7 +25,7 @@ main = do
   content <- readFile fileName
   let ast =  do parseStr program content
   case ast of
-    Left err -> print err
+    Left err -> die (show err)
     Right ast' -> do
         let cntxt = builtinFuncs ++ makeGlobalContext ast'
             -- returns Left on error
