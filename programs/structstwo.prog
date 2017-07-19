@@ -12,7 +12,7 @@ struct testtwo{
 int main(){
 
     struct testtwo t = { aa : 111, bb : {a : 222, b : 333}};
-    int sink = putChr( t[bb][a]);
+    int sink = putChr( t[bb][a ]);
     t[bb][b] = 8888;
     struct test tt = t[bb];
     sink = putChr(tt[a]);

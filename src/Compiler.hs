@@ -21,6 +21,7 @@ link output using:
 -}
 main = do
   args <- getArgs
+  when (length args < 1) (die "no file given")
   let fileName = args !! 0
   content <- readFile fileName
   let ast =  do parseStr program content
@@ -82,22 +83,28 @@ loadToAsmOff i off = ["lea edx, " ++ i
                      , "mov ecx, [edx " ++ offset ++ "]"
                      , "push ecx"]
   where offset = if off == 0 then "" else show (-off)
+
+
 storeToAsmOff i off = ["lea edx, " ++ i
                       , "pop ecx"
                       , "mov [edx " ++ offset ++ "], ecx"
                       ]
   where offset = if off == 0 then "" else show (-off)
 
+
 structAddresses start size = init [start, start - 4 .. start - size]
+
 
 loadStructImm vs = concatMap (expToAsm) values
   where (ns, values) = unzip vs
+
 
 loadStruct :: Int -> Int -> [String]
 loadStruct start size = concatMap go (structAddresses start size)
   where go x = [ "mov ecx," ++ showVariable (x)
                , "push ecx"
                ]
+
 
 makeRef i = ("lea ecx, " ++ i): ["push ecx"]
 setRef i = [ "mov ecx, " ++ i
@@ -167,8 +174,8 @@ expToAsm (_ :* exp) = case exp of
   Access _ v (Off off)                 ->  loadToAsmOff (showVariable v) off
   Var s@(_:* Struct _) v               ->  loadStruct v (sizeOf s)
 
-  Var _ v       -> loadToAsm (showVariable v)
-  MkRef _ v     -> makeRef (showVariable v)
+  Var _ v                              -> loadToAsm (showVariable v)
+  MkRef _ v                            -> makeRef (showVariable v)
 
   GetRef (_:* Ref s@(_:* Struct _)) v    ->  getStructRef (showVariable v) (sizeOf s)
   GetRef _ v                             ->  getRef (showVariable v)
@@ -249,8 +256,15 @@ compileAll p = concatMap definitionToAsm p
 
 compare' = ["pop eax", "cmp eax,0"]
 
-header =
-  "section .text\n global main\n extern printf\nextern malloc\nextern free"
+header = unlines
+  [ "section .text"
+  , "global main"
+  , " extern printf"
+  , "extern malloc"
+  , "extern putchar"
+  , "extern getchar"
+  , "extern free"
+  ]
 
 message = "message db \"answer = %d\", 10,0"
 entry = "_start:\n call begin\nret\n\n"
@@ -292,6 +306,8 @@ get' = concat
   ]
 
 builtinFuncs = [ ("putChr", go $ Proc [("",Int)] Int)
+               , ("putchar", go $ Proc [("",Int)] Int)
+               , ("getchar", go $ Proc [] Int)
                , ("set",    go $ Proc [("",Int),("",Int)] Int)
                , ("get",   go $ Proc [("",Int)] Int)
                ]

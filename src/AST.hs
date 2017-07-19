@@ -59,7 +59,9 @@ data Val' var fix = I Int
                   | S [(Var, Exp var)]
                   deriving (Show, Eq, Functor)
 
-data Offset var = Off var | NestedOff var (Offset var)
+data Offset var = Off var
+                | NestedOff var (Offset var)
+                | RefOff var (Offset var)
   deriving (Show, Eq, Functor)
 
 
@@ -270,13 +272,6 @@ lookupStructField typs var = sum $ map (sizeOf . snd) a
   where (a, _) = break go typs
         go (x,_) = x == var
 
-simplifyOffset :: [(Var, Type)] -> Offset Var -> Offset Int
-simplifyOffset ts (Off off) = Off $ lookupStructField ts off
-simplifyOffset ts (NestedOff off offs) = 
-  let off' = lookupStructField ts off
-  in case lookup off ts of
-    Just (_:* Struct ts') -> (off' +) <$> simplifyOffset ts' offs
-    _ -> Off off'
 
 getFieldType :: [(Var, Type)] -> Offset Var -> Either String Type
 getFieldType ts (Off off) = case lookup off ts of
@@ -286,9 +281,44 @@ getFieldType ts (NestedOff off offs) =
   let t = lookup off ts
   in case t of
     Just (_:* Struct ts') -> getFieldType ts' offs
+    Just (_:* Ref (_:* Struct ts')) -> getFieldType ts' offs
     _ -> Left off
-    
+getFieldType ts (RefOff off offs) = 
+  let t = lookup off ts
+  in case t of
+    Just (_:* Struct ts') -> getFieldType ts' offs
+    -- better idea for this case: have mutually recursive function that handles ref fields
+    Just (_:* Ref (_:* Struct ts')) -> getFieldType ts' offs
+    _ -> Left off
 
+  
+simplifyOffset :: [(Var, Type)] -> Offset Var -> Offset Int
+simplifyOffset ts (Off off) = Off $ lookupStructField ts off
+simplifyOffset ts (NestedOff off offs) = 
+  let off' = lookupStructField ts off
+  in case lookup off ts of
+    Just (_:* Struct ts') -> (off' +) <$> simplifyOffset ts' offs
+    _ -> Off off'
+
+{-
+   This splits offsets just before any RefOff. This is because a stmt such as
+   a ->b->c  cannot be simplified into one store/load and we must expand it to
+   multiple stores/loads.
+-}
+splitOffsets = splitOffsets' id
+--TO CONISDER: is there an easiery way of doing this
+splitOffsets' :: (Offset v -> Offset v) -> Offset v -> [Offset v]
+splitOffsets' acc off = case off of
+  Off v -> [acc (Off v)]
+  -- here we reach splits, meaning w reify the start of the offset ussing acc
+  -- and create a new empty accumulator usin id
+  NestedOff v rem@RefOff{}  -> acc (Off v) : (splitOffsets' id rem)
+  RefOff v rem@RefOff{}     -> acc (Off v) : (splitOffsets' id rem)
+  -- here we just recur and adjust the accumulator using functor composition
+  RefOff v rem  -> splitOffsets' (acc . (RefOff v)) rem
+  NestedOff v rem  -> splitOffsets' (acc . (NestedOff v)) rem
+
+  
 ----------------------------------------------------------------------
   -- set the numbering for IF and WHILE stmts. Useful for generating labels.
 
@@ -428,9 +458,9 @@ changeReturns t (co -> (stmt, ann)) =
     While i exp th  ->  [While i exp (recur th)]
     s               ->  [s]
 
+{-
+-}
 
---util for returning cofree
-returnC a b = return (a :* b)
 
 annotate_ a p = (a :*) p
 

@@ -8,6 +8,12 @@ int go(ref<int> r){
     return 1;
 }
 
+int nested(ref<ref<int>> r){
+    ref<int> t = @r;
+    @t = @t + 10; 
+    return 1;
+}
+
 int goS(ref<struct test> r){
     struct test c = @r;
     int sink = putChr(c[a]);
@@ -32,5 +38,12 @@ int main(){
     sink = goS(&beta);
     sink = putChr(beta[a]);
     sink = putChr(beta[b]);
+
+    i = 40;
+    sink = putchar(10);
+    sink = putChr(i);
+    sink = nested(&r);
+    sink = putChr(i);
+    sink = putChr(@r);
     return 0;
 }

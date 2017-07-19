@@ -286,8 +286,6 @@ exprTable = [ [ binExp "/" Div]
             , [ binExp "==" Eq ]
             , [ binExp "&&" And ]
             , [ binExp "||" Or ]
-            , [ binExp "!!" Index ]
-            , [ binExp "++" Append ]
             ]
 
 exprParser :: Parser String (Exp Var)

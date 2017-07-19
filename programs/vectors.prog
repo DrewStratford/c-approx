@@ -49,11 +49,11 @@ int printVector(struct Vec2 vec){
 int main(int argc){
     int sink = 0; // this is just a dummy value for printing
 
-    struct Vec2 vec = vector2(2,5);
+    struct Vec2 vec = vector2(2,7);
     struct Vec2 vectah = add(vec, {x : 1, y :1});
 
     sink = printVector(vec);
-    sink = putChr(argc);
+    sink = putchar(getchar(63));
     sink = printVector(vectah);
     return argc;
 }
