@@ -69,10 +69,6 @@ data Offset var = Off var
 data Op = Plus | Minus | Times | Div | Mod | And | Or | Lt | Gt | Eq | Index | Append
           deriving (Show, Eq, Read)
 
-{-
-A procedure is recursive so it can have a return type. This means that procedures that return
-procedures are possible although these are not that useful at this stage.
--}
 
 type Type = Annotated Type' 
 type RawType = Raw Type' 
@@ -89,7 +85,7 @@ data Type' typ = Bool
           | VarPlaceHolder Var
           | StructPlaceHolder Var
           | ProcPlaceHolder Var
-          -- A special type used to store info about a converted procedure that returns a struc
+          -- A special type used to store info about a converted procedure that returns a struct
           | SpecReturn Int
           deriving(Show,Eq,Functor)
 
@@ -253,7 +249,12 @@ setName v = do
   i <- get
   put i{ names = v : names i}
 
-  
+
+{-  
+ - looks up the position var v. If v is not found
+ - then we create a new position in the context
+ - and return that.
+ -}
 changeVar :: Type -> Var -> RenameM Int
 changeVar typ v = do
   info <- get
@@ -267,6 +268,7 @@ changeVar typ v = do
       return sp
 
 -- NOTE: this only works properly if the struct actually contains the field
+-- if the field is not found it returns 0
 lookupStructField :: [(Var,Type)] -> Var -> Int
 lookupStructField typs var = sum $ map (sizeOf . snd) a
   where (a, _) = break go typs
@@ -458,7 +460,9 @@ changeReturns t (co -> (stmt, ann)) =
     While i exp th  ->  [While i exp (recur th)]
     s               ->  [s]
 
+
 {-
+   Expands dereferences of structs
 -}
 
 

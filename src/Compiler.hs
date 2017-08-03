@@ -188,7 +188,6 @@ expToAsm (_ :* exp) = case exp of
   -- Also, we must make space for the return before the call.
   ProcCall (_:* Proc args s@(_:* Struct{})) exps name ->
       setUp : concatMap expToAsm (reverse exps) ++ ["call " ++ name, cleanUp]
-    --where cleanUp = "add esp," ++ show (4 * length exps)
     where cleanUp = "add esp," ++ show (sizeArgList args )
           setUp   = "sub esp," ++ show (sizeOf s)
 
@@ -222,11 +221,11 @@ stmtToAsm (_ :* stmt) = case stmt of
 
   -- TODO set Struct
   Set (_:* Ref s@(_:* Struct{})) v off e ->
-    ";chuckya" :expToAsm e ++ setStructRef (showVariable v) (sizeOf s) ++ [";CHUCKYA"]
+    expToAsm e ++ setStructRef (showVariable v) (sizeOf s)
 
   Set s@(_:* Ref{}) v off e -> expToAsm e ++ setRef (showVariable v) 
   
-  Set _ v (Off off) e                -> expToAsm e ++ storeToAsmOff (showVariable v) off
+  Set _ v (Off off) e  -> expToAsm e ++ storeToAsmOff (showVariable v) off
 
   If l exp th el -> expToAsm exp ++ cnd  ++ stmtsT ++ stmtsE
     where elL = ".IF_EL_" ++ show l
