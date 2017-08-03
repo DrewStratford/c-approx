@@ -115,12 +115,14 @@ getRef i = [ "mov ecx, " ++ i
            , "mov ecx, [ecx]"
            , "push ecx"
            ]
-getStructRef i size = concatMap getRefOff ([0,4 .. size -1])
+
+getStructRef i size = setUp ++ concatMap getRefOff ([0,4 .. size -1])
   where getRefOff x = 
-          [ "mov ecx, " ++ i
-          , "mov ecx, [ecx+" ++ show x ++ "]"
+          [ "mov ecx, " ++ showRef x
           , "push ecx"
           ]
+        setUp = ["mov edx, " ++ i]
+        showRef x = "[edx -" ++ show x ++ "]"
 
 
 setStructRef :: Var -> Int -> [String]
@@ -177,7 +179,7 @@ expToAsm (_ :* exp) = case exp of
   Var _ v                              -> loadToAsm (showVariable v)
   MkRef _ v                            -> makeRef (showVariable v)
 
-  GetRef (_:* Ref s@(_:* Struct _)) v    ->  getStructRef (showVariable v) (sizeOf s)
+  GetRef (_:* Ref s@(_:* Struct _)) v    ->  "\n;TEST" : getStructRef (showVariable v) (sizeOf s) ++ [";END TEST\n"]
   GetRef _ v                             ->  getRef (showVariable v)
   
   Bin op e1 e2  -> expToAsm e1 ++ expToAsm e2 ++ binOpToAsm op
