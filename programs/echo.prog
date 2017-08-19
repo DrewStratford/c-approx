@@ -1,0 +1,19 @@
+/*
+ * prints the input 
+ * in reverse. (terminated by enter key)
+ */
+bool echo(){
+     int chr = getchar();
+     if(chr == 10){
+     	    return True;
+     }
+     bool b = echo();
+     int sink = putchar(chr);
+     return b;
+}
+
+int main(){
+    bool b = echo();
+	int sink = putchar(10);
+    return 0;
+}
