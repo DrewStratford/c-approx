@@ -28,18 +28,19 @@ A toy language/compiler that approximates C.
 		}
 	
 	struct test testadd(struct test x, struct test y){
-		return {a : x[a] + y[a], b : x[b] + y[b]};
+	       return { a : x[a] + y[a], b: x[b] + y[b] };
 	}
-
+	
 	int main(){
 		//note: struct variables must be initialised at declaration
-		struct test foo = { a : 20, b : 30}
-		struct test bar = testadd(foo, {a : 30, b : 250 });
-
+		struct test foo = { a :20 , b : 33 };
+		struct test bar = testadd(foo, {a : 30, b : 250});
+	
 		//note: all function results must be assigned to a variable, even IO.
 		int iosink = putChr(bar[a]);
 		iosink = putChr(bar[b]);
 		
+		return 0;
 	}
 
 ## Compiling/running
