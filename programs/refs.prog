@@ -17,16 +17,17 @@ int nested(ref<ref<int>> r){
 int goS(ref<struct test> r){
     struct test c = @r;
     int sink = putChr(c[a]);
-    int sink = putChr(c[b]);
+    sink = putChr(c[b]);
     c[b] = c[b]+100;
     @r = c;
     return 1;
 }
 
 int main(){
+    int sink = 0;
     int i = 222;
     ref<int> r = &i;
-    int sink = putChr(@r);
+    //int sink = putChr(@r);
     //sink = putChr(i);
     //sink = go(r);
     //sink = putChr(@r);
@@ -35,7 +36,9 @@ int main(){
     struct test beta = {a : 11, b:22};
     sink = putChr(beta[a]);
     sink = putChr(beta[b]);
+    sink = putchar(10);
     sink = goS(&beta);
+    sink = putchar(10);
     sink = putChr(beta[a]);
     sink = putChr(beta[b]);
 

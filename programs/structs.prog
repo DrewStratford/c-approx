@@ -31,8 +31,8 @@ int main(int argc){
 
 	int sink = putChr(theta[a]);
 	sink = putChr(theta[b]);
-	sink = putChr(333);
-	sink = putChr(333);
+	sink = putchar(10);
+	sink = putchar(10);
 
 	struct test baka = fun({ bb : beta, aa : 101010 });
 	sink = putChr(baka[b]);
@@ -43,8 +43,8 @@ int main(int argc){
 	sink = putChr(beta[b]);
 	sink = putChr(beta[a]);
 
-	sink = putChr(333);
-	sink = putChr(333);
+	sink = putchar(10);
+	sink = putchar(10);
 
 	struct testtwo tuka = { bb : beta, aa : 212121};
 	tuka[bb] = { a: 89, b : 98 };
