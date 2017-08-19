@@ -168,7 +168,6 @@ showVal a@(_ :* v) = case v of
   _ -> annotatedError a "cant show lists yet"
 
 
---expToAsm (_ :* exp) = case exp of
 expToAsm (_ :* exp) = case exp of
   Const (_ :* S vs)                    ->  loadStructImm vs
   Const v                              ->  loadIToAsm (showVal v)
@@ -179,7 +178,7 @@ expToAsm (_ :* exp) = case exp of
   Var _ v                              -> loadToAsm (showVariable v)
   MkRef _ v                            -> makeRef (showVariable v)
 
-  GetRef (_:* Ref s@(_:* Struct _)) v    ->  "\n;TEST" : getStructRef (showVariable v) (sizeOf s) ++ [";END TEST\n"]
+  GetRef (_:* Ref s@(_:* Struct _)) v    ->  getStructRef (showVariable v) (sizeOf s)
   GetRef _ v                             ->  getRef (showVariable v)
   
   Bin op e1 e2  -> expToAsm e1 ++ expToAsm e2 ++ binOpToAsm op
