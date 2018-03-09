@@ -24,10 +24,10 @@ definition = LanguageDef
     , identStart = letter
     , identLetter = alphaNum
     , opStart = opLetter definition
-    , opLetter = oneOf "-+*/<=>:&|;()"
+    , opLetter = oneOf "-+*/<=>:&|;()~"
     , reservedOpNames = []
     , reservedNames = ["if", "then", "else"
-                      , "bool", "int", "list", "True"
+                      , "bool", "int", "float", "list", "True"
                       , "False", "return", "while", "struct"
                       ]
     , caseSensitive = True
@@ -213,8 +213,8 @@ parseFieldAccess = annotate' $ \pos -> do
 parseVal :: Parser String (Val Var)
 parseVal = try (annotate $ reserved parser "True" >> return (B True))
            <|> try (annotate $ reserved parser "False" >> return (B False))
-           <|> try (annotate $ integer parser >>= return . I . fromInteger)
            <|> try (annotate $ float parser >>= return . F . realToFrac )
+           <|> try (annotate $ integer parser >>= return . I . fromInteger)
            <|> parseStruct
            <?> "couldn't parse a value"
   
