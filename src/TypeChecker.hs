@@ -23,6 +23,7 @@ getTypeVal :: Val String -> ContextM Type
 getTypeVal (co -> (val,ann)) = ann <$> case val of
        B b -> return Bool
        I b -> return Int
+       F b -> return Float
        A vs -> error "implement arrays"
        S elems -> do
          let (ns, vs) = unzip elems
@@ -31,6 +32,11 @@ getTypeVal (co -> (val,ann)) = ann <$> case val of
 
 getTypeBinOp :: Op -> Type -> Type -> ContextM Type
 getTypeBinOp op l r = case (l, op, r) of
+  (ann :* Float, Plus, _:* Float)  -> return $ ann :* Float
+  (ann :* Float, Minus, _:* Float) -> return $ ann :* Float
+  (ann :* Float, Times, _:* Float) -> return $ ann :* Float
+  (ann :* Float, Div, _:* Float)   -> return $ ann :* Float
+
   (ann :* Int, Plus, _:* Int)  -> return $ ann :* Int
   (ann :* Int, Minus, _:* Int) -> return $ ann :* Int
   (ann :* Int, Times, _:* Int) -> return $ ann :* Int
@@ -299,6 +305,7 @@ expandTypeVal :: Val String -> ContextM (Val Var)
 expandTypeVal (ann :* val) = (ann :*) <$> case val of
        B b -> return (B b)
        I b -> return (I b)
+       F b -> return (F b)
        A vs -> do
          vs' <- mapM expandTypeVal vs
          return (A vs')

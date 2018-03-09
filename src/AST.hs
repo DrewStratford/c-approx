@@ -54,6 +54,7 @@ data Exp' var exp = Const (Val var)
 
 type Val a = Annotated (Val' a)
 data Val' var fix = I Int 
+                  | F Float
                   | B Bool 
                   | A [fix] 
                   | S [(Var, Exp var)]
@@ -74,6 +75,7 @@ type Type = Annotated Type'
 type RawType = Raw Type' 
 data Type' typ = Bool 
           | Int 
+          | Float
           | Array Int typ 
           | Struct [(Var,typ)]
           | Proc [(Var,typ)] typ 
@@ -171,6 +173,7 @@ renameVal :: Val Var -> RenameM (Val Int)
 renameVal (co -> (val, ann)) = ann <$> case val of
     B b -> return (B b)
     I b -> return (I b)
+    F b -> return (F b)
     A vs -> do
       vs' <- mapM renameVal vs
       return (A vs')
@@ -413,8 +416,9 @@ sizeArgList args = sum (map (sizeOf . snd) args)
 
 sizeOf :: Type -> Int
 sizeOf (_ :* typ) = case typ of
-    Bool -> 4
-    Int  -> 4
+    Bool  -> 4
+    Int   -> 4
+    Float -> 4
     Ref _ -> 4
     Array l t -> l * sizeOf t
     Struct vs -> sum $ map (sizeOf . snd) vs
