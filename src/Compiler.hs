@@ -65,6 +65,11 @@ binOpToAsm op =
                  "push eax"]
       divis   = ["pop ebx", "xor edx, edx", "pop eax", "div ebx", "push eax"]
       modulo  = ["pop ebx", "pop eax", "xor edx, edx", "div ebx", "push edx"]
+      arithf x = [ "fld qword [esp]"
+                , "add esp, 4"
+                , "fld qword [esp]"
+                , x ++ " st0, st1"
+                , "fstp [esp]"]
   in case op of
         Plus  -> arith "add"
         Minus -> arith "sub"
@@ -74,19 +79,10 @@ binOpToAsm op =
         Eq    -> logic "sete"
         Gt    -> logic "setg"
         Lt    -> logic "setl"
-
-binOpToAsmFloat op =
-  let arith x = [ "fld qword [esp]"
-                , "add esp, 4"
-                , "fld qword [esp]"
-                , x ++ " st0, st1"
-                , "fstp [esp]"]
-  in case op of
-        Plus  -> arith "faddp"
-        Minus -> arith "fsubp"
-        Times -> arith "fmulp"
-        Div   -> arith "fdivp"
-        _     -> error $ "No floating point version of this binop " ++ show op
+        FPlus  -> arith "faddp"
+        FMinus -> arith "fsubp"
+        FTimes -> arith "fmulp"
+        FDiv   -> arith "fdivp"
 
 
 loadIToAsm i = ("mov ecx, " ++ i): ["push ecx"]
@@ -176,6 +172,7 @@ storeStruct start size = concatMap go (reverse $ structAddresses start size)
 
 showVal a@(_ :* v) = case v of
   I i     -> show i
+  F f     -> show f
   B True  -> "1"
   B False -> "0"
   _ -> annotatedError a "cant show lists yet"

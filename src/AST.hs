@@ -68,6 +68,7 @@ data Offset var = Off var
 
 
 data Op = Plus | Minus | Times | Div | Mod | And | Or | Lt | Gt | Eq | Index | Append
+        | FPlus | FMinus | FTimes | FDiv
           deriving (Show, Eq, Read)
 
 

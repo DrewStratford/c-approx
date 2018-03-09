@@ -32,10 +32,10 @@ getTypeVal (co -> (val,ann)) = ann <$> case val of
 
 getTypeBinOp :: Op -> Type -> Type -> ContextM Type
 getTypeBinOp op l r = case (l, op, r) of
-  (ann :* Float, Plus, _:* Float)  -> return $ ann :* Float
-  (ann :* Float, Minus, _:* Float) -> return $ ann :* Float
-  (ann :* Float, Times, _:* Float) -> return $ ann :* Float
-  (ann :* Float, Div, _:* Float)   -> return $ ann :* Float
+  (ann :* Float, FPlus, _:* Float)  -> return $ ann :* Float
+  (ann :* Float, FMinus, _:* Float) -> return $ ann :* Float
+  (ann :* Float, FTimes, _:* Float) -> return $ ann :* Float
+  (ann :* Float, FDiv, _:* Float)   -> return $ ann :* Float
 
   (ann :* Int, Plus, _:* Int)  -> return $ ann :* Int
   (ann :* Int, Minus, _:* Int) -> return $ ann :* Int
