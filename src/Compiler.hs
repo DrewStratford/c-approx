@@ -79,10 +79,10 @@ binOpToAsm op =
         Eq    -> logic "sete"
         Gt    -> logic "setg"
         Lt    -> logic "setl"
-        FPlus  -> arith "faddp"
-        FMinus -> arith "fsubp"
-        FTimes -> arith "fmulp"
-        FDiv   -> arith "fdivp"
+        FPlus  -> arithf "faddp"
+        FMinus -> arithf "fsubp"
+        FTimes -> arithf "fmulp"
+        FDiv   -> arithf "fdivp"
 
 
 loadIToAsm i = ("mov ecx, " ++ i): ["push ecx"]
