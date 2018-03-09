@@ -1,4 +1,5 @@
-{-# LANGUAGE UndecidableInstances, PatternSynonyms, ViewPatterns, DeriveFunctor#-}
+--{-# LANGUAGE UndecidableInstances, PatternSynonyms, ViewPatterns, DeriveFunctor#-}
+{-# LANGUAGE FlexibleInstances, PatternSynonyms, ViewPatterns, DeriveFunctor#-}
 module AST where
 
 import Control.Monad
@@ -15,14 +16,29 @@ import Debug.Trace
 
 data Annotated f = SourcePos :*  f (Annotated f) 
 data Raw f = R (f (Raw f))
+
+instance Show (Raw Type') where show (R f) = show f
+instance Eq (Raw Type') where (R f) == (R g) = g == f
+
+instance Show Type where show (_ :* f) = show f
+instance Eq Type where (_ :* f) == (_ :* g) = g == f
+instance (Show a) => Show (Definition a) where show (_ :* f) = show f
+instance (Eq a) => Eq (Definition a) where (_ :* f) == (_ :* g) = g == f
+instance (Show a) => Show (Stmt a) where show (_ :* f) = show f
+instance (Eq a) => Eq (Stmt a) where (_ :* f) == (_ :* g) = g == f
+instance (Show a) => Show (Exp a) where show (_ :* f) = show f
+instance (Eq a) => Eq (Exp a) where (_ :* f) == (_ :* g) = g == f
+instance (Show a) => Show (Val a) where show (_ :* f) = show f
+instance (Eq a) => Eq (Val a) where (_ :* f) == (_ :* g) = g == f
+  {-
 instance Show (f (Raw f)) => Show (Raw f) where
   show (R f) = show f
-
 instance Show (f (Annotated f)) => Show (Annotated f) where
   --show (a :* f) = show a ++ show f
   show (a :* f) = show f
 instance Eq (f (Annotated f)) => Eq (Annotated f) where
   (_ :* a) == (_ :* b) = a == b
+-}
 
 type Prog var = [Definition var]
 
@@ -487,8 +503,21 @@ instance ToRaw (Type' )where
   toRaw f = R ((toRaw . const Int) <$> f)
   
 
-class Functor f => ToAnnotated f where
-  toAnn :: SourcePos -> f a -> Annotated f
+class ToAnn f where
+  toAnn :: SourcePos -> f -> Type
 
-instance ToAnnotated (Type' )where
-  toAnn ann f = ann :* ((toAnn ann . const Int) <$> f)
+newtype AnnTerminate = AT (Type' ())
+
+--instance ToAnn (Type' ()) where
+instance ToAnn AnnTerminate where
+  toAnn s f = case f of
+    (AT Float) -> s :* Float
+    (AT Bool)  -> s :* Bool
+    _     -> s :* Int
+
+instance ToAnn a => ToAnn (Type' a) where
+  toAnn s f = s :* ((toAnn s) <$> f)
+
+type WrittenType = Type' (Type' (Type' (Type' (Type' (Type' (Type' (Type' (Type' (Type' (Type' (Type' (Type' (Type' (Type' (Type' (Type' (Type' (Type' (AnnTerminate))))))))))))))))))) 
+
+  

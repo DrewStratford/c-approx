@@ -48,7 +48,9 @@ main = do
           Right compiled' -> do
             putStrLn header
             putStrLn message
+            putStrLn floatMessage
             putStrLn printf
+            putStrLn putFloat
             putStrLn get'
             putStrLn set
             putStrLn "\n"
@@ -65,11 +67,11 @@ binOpToAsm op =
                  "push eax"]
       divis   = ["pop ebx", "xor edx, edx", "pop eax", "div ebx", "push eax"]
       modulo  = ["pop ebx", "pop eax", "xor edx, edx", "div ebx", "push edx"]
-      arithf x = [ "fld qword [esp]"
+      arithf x = [ "fld dword [esp]"
                 , "add esp, 4"
-                , "fld qword [esp]"
-                , x ++ " st0, st1"
-                , "fstp [esp]"]
+                , "fld dword [esp]"
+                , x -- ++ " st0, st1"
+                , "fstp dword [esp]"]
   in case op of
         Plus  -> arith "add"
         Minus -> arith "sub"
@@ -172,7 +174,7 @@ storeStruct start size = concatMap go (reverse $ structAddresses start size)
 
 showVal a@(_ :* v) = case v of
   I i     -> show i
-  F f     -> show f
+  F f     -> "__float32__("++ show f ++ ")"
   B True  -> "1"
   B False -> "0"
   _ -> annotatedError a "cant show lists yet"
@@ -276,7 +278,9 @@ header = unlines
   , "extern free"
   ]
 
-message = "message db \"answer = %d\", 10,0"
+message = "message db \"%d\", 10,0"
+floatMessage = "floatMessage db \"%f\", 10,0"
+myFloat = "myFloat: dd 1.24"
 entry = "_start:\n call begin\nret\n\n"
 
 printf = concat
@@ -286,6 +290,24 @@ printf = concat
   , "mov eax, [ebp+8] \n"
   , "push eax \n"
   , "push message \n"
+  , "call printf \n"
+  , "add esp, 8 \n"
+  , "mov eax, [ebp+8] \n"
+  , "leave\n"
+  , "ret"
+  ]
+
+putFloat = concat
+  [ "putFloat:\n"
+  , "push ebp \n"
+  , "mov ebp, esp\n"
+  , "sub esp, 4\n"
+  , "mov eax, [ebp+8]\n"
+  , "mov [esp], eax\n"
+  , "fld dword [esp] \n"
+  , "sub esp, 4\n"
+  , "fstp qword [esp]\n"
+  , "push floatMessage \n"
   , "call printf \n"
   , "add esp, 8 \n"
   , "mov eax, [ebp+8] \n"
@@ -315,11 +337,15 @@ get' = concat
   , "ret"
   ]
 
-builtinFuncs = [ ("putChr", go $ Proc [("",Int)] Int)
-               , ("putchar", go $ Proc [("",Int)] Int)
-               , ("getchar", go $ Proc [] Int)
-               , ("set",    go $ Proc [("",Int),("",Int)] Int)
-               , ("get",   go $ Proc [("",Int)] Int)
-               ]
-  where go = toAnn (newPos "builtin" 0 0)
+builtinFuncs = map go builtins
+  where go (s, x) = (s,  toAnn (newPos "builtin" 0 0) x)
+        builtins :: [(String, WrittenType)]
+        builtins = 
+          [ ("putChr",   Proc [("",Int)] Int)
+          , ("putFloat",   Proc [("",Float)] Int)
+          , ("putchar",   Proc [("",Int)] Int)
+          , ("getchar",   Proc [] Int)
+          , ("set",      Proc [("",Int),("",Int)] Int)
+          , ("get",     Proc [("",Int)] Int)
+          ]
 
