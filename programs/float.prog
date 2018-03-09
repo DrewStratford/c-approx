@@ -1,0 +1,16 @@
+float squarePlus(float a, float b){
+      a = a *~ a;
+      b = b *~ b;
+      return a +~ b;
+      }
+int main(){
+    float a = 3.33333;
+    float c = 4.1;
+    int sink = putFloat(a);
+    sink = putFloat(c);
+    sink = putFloat(a +~ c);
+    sink = putFloat( a *~ 3.00);
+    sink = putFloat(squarePlus(1.2, 4.2));
+
+    return 0;
+}
