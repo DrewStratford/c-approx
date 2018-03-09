@@ -214,6 +214,7 @@ parseVal :: Parser String (Val Var)
 parseVal = try (annotate $ reserved parser "True" >> return (B True))
            <|> try (annotate $ reserved parser "False" >> return (B False))
            <|> try (annotate $ integer parser >>= return . I . fromInteger)
+           <|> try (annotate $ float parser >>= return . F . realToFrac )
            <|> parseStruct
            <?> "couldn't parse a value"
   
@@ -222,6 +223,7 @@ parseVal = try (annotate $ reserved parser "True" >> return (B True))
 parseType :: Parser String Type
 parseType =  (annotate $ reserved parser "bool" >> return Bool)
          <|> (annotate $ reserved parser "int" >> return Int)
+         <|> (annotate $ reserved parser "float" >> return Float)
          <|> annotate (
              do reserved parser "ref"
                 t <- angles parser parseType
