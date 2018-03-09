@@ -75,6 +75,19 @@ binOpToAsm op =
         Gt    -> logic "setg"
         Lt    -> logic "setl"
 
+binOpToAsmFloat op =
+  let arith x = [ "fld qword [esp]"
+                , "add esp, 4"
+                , "fld qword [esp]"
+                , x ++ " st0, st1"
+                , "fstp [esp]"]
+  in case op of
+        Plus  -> arith "faddp"
+        Minus -> arith "fsubp"
+        Times -> arith "fmulp"
+        Div   -> arith "fdivp"
+        _     -> error $ "No floating point version of this binop " ++ show op
+
 
 loadIToAsm i = ("mov ecx, " ++ i): ["push ecx"]
 loadToAsm i = ("mov ecx, " ++ i): ["push ecx"]
