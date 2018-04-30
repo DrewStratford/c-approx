@@ -1,3 +1,19 @@
+struct vector2f{
+       float x,
+       float y
+}
+
+struct test{
+       int x,
+       int y
+}
+
+int printVector2f(struct vector2f v){
+    int sink = putFloat(v[x]);
+    sink = putFloat(v[y]);
+    return 0; 
+}
+
 float squarePlus(float a, float b){
       a = a *~ a;
       b = b *~ b;
@@ -11,6 +27,10 @@ int main(){
     sink = putFloat(a +~ c);
     sink = putFloat( a *~ 3.00);
     sink = putFloat(squarePlus(1.2, 4.2));
+
+    sink = printVector2f({ y : 45.45, x : 23.23});
+    struct test t = {x : 1, y : 2};
+    sink = putChr(t[x]);
 
     return 0;
 }

@@ -70,7 +70,7 @@ binOpToAsm op =
       arithf x = [ "fld dword [esp]"
                 , "add esp, 4"
                 , "fld dword [esp]"
-                , x -- ++ " st0, st1"
+                , x 
                 , "fstp dword [esp]"]
   in case op of
         Plus  -> arith "add"
