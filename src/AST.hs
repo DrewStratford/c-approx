@@ -128,8 +128,8 @@ makeNewStack :: [(Var, Type)] -> RenameM ()
 makeNewStack args = do
   let ns = zip vs $ sizedArgs
       (vs, ts) = unzip args
-      sp = -4
-      sizedArgs = drop 1 $ scanl go 4 ts
+      sp = 0
+      sizedArgs = scanl go 8 ts
       go o x = (o + sizeOf x)
   put (SI ns sp)
 
@@ -141,7 +141,7 @@ type RenameM a = S.State StackInfo a
 
 renameProg :: Prog Var -> Prog Int
 renameProg p = fst $ runState go st 
-  where st = SI [] (-4)
+  where st = SI [] 0
         go = mapM renameDef p
 
 renameExp :: Exp Var -> RenameM (Exp Int) 
@@ -282,9 +282,9 @@ changeVar typ v = do
   case n of
     Just n' -> return n'
     Nothing -> do
+      incSp (sizeOf typ)
       sp <- getSp
       setName (v, sp)
-      incSp (sizeOf typ)
       return sp
 
 -- NOTE: this only works properly if the struct actually contains the field
