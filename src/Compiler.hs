@@ -128,23 +128,23 @@ getRef i = [ "mov ecx, " ++ i
            , "push ecx"
            ]
 
-getStructRef i size = setUp ++ concatMap getRefOff ([0,4 .. size -1])
+getStructRef i size = setUp ++ concatMap getRefOff (reverse [0,4 .. size -1])
   where getRefOff x = 
           [ "mov ecx, " ++ showRef x
           , "push ecx"
           ]
         setUp = ["mov edx, " ++ i]
-        showRef x = "[edx -" ++ show x ++ "]"
+        showRef x = "[edx +" ++ show x ++ "]"
 
 
 setStructRef :: Var -> Int -> [String]
 setStructRef i size =
-    setUp ++ concatMap go (reverse [0,4 .. size -1])
+    setUp ++ concatMap go [0,4 .. size -1]
   where go x = [ "pop ecx"
                , "mov " ++ showRef x ++ ", ecx"
                ]
         setUp = ["mov edx, " ++ i]
-        showRef x = "[edx -" ++ show x ++ "]"
+        showRef x = "[edx +" ++ show x ++ "]"
 
 
 loadStructOff :: Int -> Int -> Int -> [String]
