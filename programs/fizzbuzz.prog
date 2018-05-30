@@ -2,10 +2,78 @@ int id(int i){
 	return i;
 }
 
+struct test{
+       int a,
+       int b
+}
+
+int first(int a, int b){
+    return a;
+}
+
+int second(int a, int b){
+    return b;
+}
+
+int firstT(struct test t, int b){
+    //t[a] = t[a];
+    return t[a];
+}
+int secondT(struct test t, int b){
+    return t[b];
+}
+
+struct test construct(int aa, int bb){
+       return { a : aa, b : bb} ;
+}
+
 int main(){
+    /*
+    expected output:
+
+    -1
+    19
+
+    12345
+    12345
+    19
+    19
+
+    12345
+    19
+
+    12345
+    19
+
+    12345
+    19
+    */
 	int i = id(-1);
 	int sink = putChr(i);
+
+	struct test t = {a : 12345, b : 19 };
+	struct test t2 = construct(12345, 19);
+	
 	i = i + 20;
 	sink = putChr(i);
+	sink = putchar(10);
+
+	sink = putChr(t[a]);
+	sink = putChr(t2[a]);
+	sink = putChr(t[b]);
+	sink = putChr(t2[b]);
+	sink = putchar(10);
+
+	sink = putChr(first(12345,i));
+	sink = putChr(second(12345,i));
+	sink = putchar(10);
+
+	sink = putChr(firstT( t, 1));
+	sink = putChr(secondT(t, 1));
+	sink = putchar(10);
+
+	sink = putChr(firstT(t2, 1));
+	sink = putChr(secondT(t2, 1));
+	sink = putchar(10);
 	return 0;
 }
