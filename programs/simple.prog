@@ -1,4 +1,32 @@
+struct test{
+       int a,
+       int b
+}
+
+struct embed{
+       int i,
+       struct test embedded
+}
+
+/* this doesn't work cause field access doesn't work on refs or stack variables
+int foo(ref<struct test> t, bool first){
+    int sink = 0;
+    if(first){
+	sink = putChr(@t[a]);
+    } else{
+	sink = putChr(@t[b]);
+    }
+    return sink;
+}
+*/
+
 int main(){
-	int i = 10;
-	i = i + 1;
+    struct embed e = { i : 21212121, embedded : { a : 1, b : 2}};
+    int sink = putChr(e[i]);
+    	sink = putChr(e[embedded][b]);
+    struct test t = e[embeded];
+    	   sink = putChr(t[a]);
+    	   sink = putChr(t[b]);
+
+    return 0;
 }

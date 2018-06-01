@@ -7,6 +7,11 @@ struct test{
        int b
 }
 
+struct embed{
+       int aa,
+       struct test embedded
+       }
+
 int first(int a, int b){
     return a;
 }
@@ -27,6 +32,19 @@ struct test construct(int aa, int bb){
        return { a : aa, b : bb} ;
 }
 
+int printTest(ref<struct test> t){
+    struct test s = @t;
+    int sink = putChr(s[a]);
+    	sink = putChr(s[b]);
+	sink = putchar(10);
+    return 0;
+}
+
+int filltest(ref<struct test> t){
+    @t = {a : 12345, b : 19};
+    return 0;
+}
+
 int main(){
     /*
     expected output:
@@ -37,6 +55,9 @@ int main(){
     12345
     12345
     19
+    19
+
+    12345
     19
 
     12345
@@ -75,5 +96,16 @@ int main(){
 	sink = putChr(firstT(t2, 1));
 	sink = putChr(secondT(t2, 1));
 	sink = putchar(10);
+
+	struct test t3 = { a : 0, b : 0};
+	sink = filltest(&t3);
+	sink = printTest(&t3);
+
+	struct embed e = { aa : 54321, embedded : t};
+	sink = putChr(e[aa]);
+	sink = putChr(e[embedded][a]);
+	sink = putChr(e[embedded][b]);
+	t3 = e[embedded];
+	sink = printTest(&t3);
 	return 0;
 }
