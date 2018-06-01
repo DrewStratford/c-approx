@@ -106,7 +106,7 @@ storeToAsmOff i off = ["lea edx, " ++ i
 structAddresses start size = init [start, start + 4 .. start + size]
 
 
-  -- We need to reverse the values here as we are pushing to the stack
+  -- We need to reverse the values here as we are pushing to the stack which grows downwards.
 loadStructImm vs = concatMap (expToAsm) $ reverse values
   where (ns, values) = unzip vs
 
@@ -149,23 +149,22 @@ setStructRef i size =
 
 loadStructOff :: Int -> Int -> Int -> [String]
 loadStructOff start size off =
-    setUp ++ concatMap go ([0,4 .. size -1])
+    setUp ++ concatMap go (reverse [0,4 .. size -1])
   where go x = [ "mov ecx," ++ showRef x
                , "push ecx"
                ]
-        setUp = ["lea edx, " ++ showVariable (start-off)]
-        showRef x = "[edx -" ++ show x ++ "]"
+        setUp = ["lea edx, " ++ showVariable (start+off)]
+        showRef x = "[edx +" ++ show x ++ "]"
 
 
-{-- TODO: this will need work --}
 storeStructOff :: Int -> Int -> Int -> [String]
 storeStructOff start size off =
-    setUp ++ concatMap go (reverse $ [0,4 .. size -1])
+    setUp ++ concatMap go [0,4 .. size -1]
   where go x = [ "pop ecx"
                , "mov " ++ showRef x ++ ", ecx"
                ]
-        setUp = ["lea edx, " ++ showVariable (start-off)]
-        showRef x = "[edx -" ++ show x ++ "]"
+        setUp = ["lea edx, " ++ showVariable (start+off)]
+        showRef x = "[edx +" ++ show x ++ "]"
 
   
 storeStruct :: Int -> Int -> [String]
