@@ -59,6 +59,7 @@ data Stmt' var stmt = VarDef Type var (Exp var)
 
 type Exp a = Annotated (Exp' a)
 data Exp' var exp = Const (Val var)
+                  | Cast Type exp       -- Casts an expression to a result of same size
                   | Var Type  var 
                   | MkRef Type  var 
                   | GetRef Type  var 
@@ -181,6 +182,9 @@ renameExp a@(co -> (exp, ann)) = ann <$> case exp of
          th' <- renameExp th
          el' <- renameExp el
          return (IfE l cond' th' el')
+
+       Cast t exp  ->
+         renameExp exp >>= return . Cast t
 
        Const val  ->
          renameVal val >>= return . Const
@@ -348,6 +352,7 @@ type LabelM a = S.State Int a
 
 setLabelExp :: Exp a -> LabelM (Exp a)
 setLabelExp (co -> (exp,ann)) = ann <$> case exp of
+    Cast typ exp  -> setLabelExp exp >>= return . Cast typ
     Bin op l r -> do
       l'  <-  setLabelExp l
       r'  <-  setLabelExp r

@@ -155,7 +155,15 @@ program = do
 ------------------------------------------
   -- parse expressions
 
-binExp :: String -> Op -> Operator String u Identity (Exp Var)
+parseCast :: Operator String () Identity (Exp Var)
+parseCast = Prefix go
+  where go = do
+          s <- sourcePos
+          typ <- parens parser parseType 
+          return (\exp -> s :* Cast typ exp)
+
+  
+binExp :: String -> Op -> Operator String () Identity (Exp Var)
 binExp p op = 
   let t = do
         s <- sourcePos 
@@ -278,7 +286,9 @@ parseTerm =  try (annotate $ Const <$> parseVal >>= return)
 
   
 
-exprTable = [ [ binExp "/" Div]
+exprTable :: [[Operator String () Identity (Exp Var)]]
+exprTable = [ [ parseCast ]
+            , [ binExp "/" Div]
             , [ binExp "%" Mod]
             , [ binExp "*" Times ]
             , [ binExp "+" Plus ]

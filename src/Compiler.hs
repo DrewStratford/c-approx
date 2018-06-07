@@ -182,6 +182,8 @@ showVal a@(_ :* v) = case v of
 
 
 expToAsm (_ :* exp) = case exp of
+  -- TODO: handle special float->int version of cast
+  Cast _ subExp                        -> expToAsm subExp
   Const (_ :* S vs)                    ->  loadStructImm vs
   Const v                              ->  loadIToAsm (showVal v)
   Access s@(_:* Struct{}) v (Off off)  ->  loadStructOff v (sizeOf s) off
@@ -225,8 +227,12 @@ stmtToAsm :: Stmt Int -> [String]
 stmtToAsm (_ :* stmt) = case stmt of
   VarDef s@(_:* Struct vs) v exp -> expToAsm exp ++ storeStruct v (sizeOf s)
 
+  VarDef _ v (_ :* Cast _ (_ :* Const val)) -> ["mov ecx, " ++ showVal val
+                                                , "mov " ++ showVariable v ++ ", ecx"]
   VarDef _ v (_ :* Const val) -> ["mov ecx, " ++ showVal val
                             , "mov " ++ showVariable v ++ ", ecx"]
+  VarDef _ v (_ :* Cast _ (_ :* Var _ var)) -> ["mov ecx, " ++ showVariable var
+                                               , "mov " ++ showVariable v ++ ", ecx"]
   VarDef _ v (_ :* Var _ var) -> ["mov ecx, " ++ showVariable var
                             , "mov " ++ showVariable v ++ ", ecx"]
   VarDef _ v exp -> expToAsm exp ++ storeToAsm v

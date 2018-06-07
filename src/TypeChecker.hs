@@ -82,6 +82,12 @@ getTypeExp (ann :* exp) = case exp of
        MkRef typ v          -> return typ
        GetRef (_:* Ref t) v -> return t
        Const val            -> getTypeVal val
+       -- casts should only work when types are the same size
+       Cast castingTo exp   -> do
+         castingFrom <- getTypeExp exp
+         typeGuard (sizeOf castingFrom == sizeOf castingTo) ann "casting to a size that doesn't match"
+         return castingTo
+         
 
        nonRecursive -> typeError ann "cant type expression"
 
@@ -118,7 +124,7 @@ getTypeStmt returnType (ann :* stmt) = case stmt of
     expType <- getTypeExp exp
     if typ == expType
       then insertType (var, typ)
-      else typeError ann "exp doesn't match type its being assigned to"
+      else typeError ann $ "exp doesn't match type its being assigned to " ++ show (typ, expType)
   VoidReturn -> return ()
   Return exp  -> do
     exp' <- getTypeExp exp
@@ -206,7 +212,8 @@ expandTypeExp (ann :* exp) = (ann :*) <$>
          typ' <- lookupType ann t >>= typeExpand
          return (GetRef typ' v)
 
-       Const val -> expandTypeVal val >>= return . Const
+       Const val -> Const <$> expandTypeVal val 
+       Cast typ exp -> Cast <$> typeExpand typ <*> expandTypeExp exp
 
        nonRecursive -> return nonRecursive
 
@@ -338,3 +345,11 @@ expandError :: SourcePos -> String -> Either String b -> ContextM b
 expandError ann msg err = case err of
   Right val -> return val
   Left err' -> lift (Left $ show ann ++ ": type error, " ++ msg ++ err')
+
+{-
+ - A version of gaurd that causes a typeError on failure
+ -}
+typeGuard :: Show ann => Bool -> ann -> String -> ContextM ()
+typeGuard b ann msg = case b of
+  True -> return ()
+  False -> (typeError ann msg)
