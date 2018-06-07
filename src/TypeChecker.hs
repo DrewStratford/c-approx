@@ -240,9 +240,10 @@ expandType (ann :* stmt) = (ann :* ) <$> case stmt of
          insertType (v, typ)
          return (VarDef typ v exp')
        VarDef t v exp -> do
+         t' <- typeExpand t
          exp' <- expandTypeExp exp
-         insertType (v, t)
-         return (VarDef t v exp')
+         insertType (v, t')
+         return (VarDef t' v exp')
        Return exp -> do
          exp' <- expandTypeExp exp
          return (Return exp')
