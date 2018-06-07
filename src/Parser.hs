@@ -159,7 +159,8 @@ parseCast :: Operator String () Identity (Exp Var)
 parseCast = Prefix go
   where go = do
           s <- sourcePos
-          typ <- parens parser parseType 
+          typ <- parseType
+          reservedOp parser "::"
           return (\exp -> s :* Cast typ exp)
 
   

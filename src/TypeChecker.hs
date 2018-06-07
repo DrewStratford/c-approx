@@ -49,7 +49,7 @@ getTypeBinOp op l r = case (l, op, r) of
   (ann :* Bool, And, _:* Bool)  -> return $ ann :* Bool
   (ann :* Bool, Or, _:* Bool)  -> return $ ann :* Bool
   (ann :* Ref{}, Eq, _:* Ref{}) -> return $ ann :* Bool
-  (ann :* _, _, _ )            -> typeError ann "misapplied operator"
+  (ann :* _, _, _ )            -> typeError ann $ "misapplied operator" ++ show (l, op, r)
 
 getTypeExp :: (Exp Var) -> ContextM Type
 getTypeExp (ann :* exp) = case exp of
